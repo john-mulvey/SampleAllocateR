@@ -461,7 +461,8 @@ allocate_samples <- function(data,
   }
   # join the output with the original data
   output$layout = output$layout %>%
-    left_join(original_data)
+    left_join(original_data) %>%
+    dplyr::rename_with(~ id_column, .cols = "sample_id")
 
   return(output)
 }
