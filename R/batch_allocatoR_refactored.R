@@ -507,13 +507,13 @@ plot_layout <- function(output, id_column = "sample_id", covariates) {
   }
 
   layout = layout %>%
-    select(id_column, batch_allocation, all_of(covariates))
+    select({{id_column}}, batch_allocation, all_of(covariates))
 
   # continuous covariates
   continuous_plot = layout %>%
     dplyr::rename(batch = batch_allocation) %>%
-    dplyr::select(where(is.numeric) | sample_id, batch) %>%
-    pivot_longer(cols = !c(sample_id, batch), names_to = "covariate", values_to = "value") %>%
+    dplyr::select(where(is.numeric) | {{id_column}}, batch) %>%
+    pivot_longer(cols = !c({{id_column}}, batch), names_to = "covariate", values_to = "value") %>%
     ggplot(aes(x = batch, y = value)) +
       geom_point() +
       facet_wrap(~ covariate)
@@ -522,8 +522,8 @@ plot_layout <- function(output, id_column = "sample_id", covariates) {
 # categorical covariates
   categorical_plot = layout %>%
     dplyr::rename(batch = batch_allocation) %>%
-    dplyr::select(where(is.factor) | sample_id, batch) %>%
-    pivot_longer(cols = !c(sample_id, batch), names_to = "covariate", values_to = "value") %>%
+    dplyr::select(where(is.factor) | {{id_column}}, batch) %>%
+    pivot_longer(cols = !c(id_column, batch), names_to = "covariate", values_to = "value") %>%
     group_by(covariate, value, batch) %>%
     summarise(n = n()) %>%
     ggplot(aes(x = batch, y = n, fill = value)) +
