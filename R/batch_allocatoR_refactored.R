@@ -167,13 +167,10 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
     # Step 3: Create new rows for unfilled spots
     empty_rows <- do.call(rbind, lapply(names(unfilled_spots), function(batch) {
       if (unfilled_spots[batch] > 0) {
-        data.frame(
-          covariate1 = NA,
-          covariate2 = NA,
-          covariate3 = NA,
-          block_id = NA,
-          batch_allocation = factor(rep(batch, unfilled_spots[batch]))
-        )
+        empty_row <- as.data.frame(matrix(NA, nrow = unfilled_spots[batch], ncol = ncol(data)))
+        colnames(empty_row) <- colnames(data)
+        empty_row$batch_allocation <- factor(rep(batch, unfilled_spots[batch]), levels = levels(data_blocked$batch_allocation))
+        return(empty_row)
       }
     }))
     empty_rows$sample_id <- paste0("padding", seq_len(nrow(empty_rows)))
