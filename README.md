@@ -2,16 +2,16 @@ This is a pre-release version of the SampleAllocateR package: designed to optima
 
 To install the latest version:
 ```r
-# if required
+# if required, install remotes package
 install.packages("remotes")
 
 # install package from github
 remotes::install_github("https://github.com/john-mulvey/SampleAllocateR", build_vignettes = TRUE)
 ```
-Note that building vignettes is currently very slow, these will distributed pre-built in a future version.
+Note that building vignettes is currently very slow, but that it is not possible to supply them pre-built when installing the pacakge from github. If you would rather not wait, the vignette can be viewed [on the package website](https://john-mulvey.github.io/SampleAllocateR/)
 
 
-# Quick Start guide
+# Quick Start Guide
 In order to generate a layout with the optimal balance of covariates between experimental batches:
 ```r
 optimal_layout_blocked = allocate_samples(toy_data, 
