@@ -1,4 +1,5 @@
-[![R-CMD-check.yaml](https://github.com/john-mulvey/SampleAllocateR/actions/workflows/check-standard.yaml/badge.svg)](https://github.com/john-mulvey/SampleAllocateR/actions/workflows/check-standard.yaml)
+<!-- badges: start -->
+<!-- badges: end -->
 
 This is a pre-release version of the SampleAllocateR package: designed to optimally allocate samples with known covariates to experimetnal batches.
 
