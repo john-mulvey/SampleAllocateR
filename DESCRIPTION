@@ -2,11 +2,11 @@ Package: SampleAllocateR
 Title: Covariate Balanced Allocation of Preselected Samples to Experimental Batches
 Version: 0.0.0.9000
 Authors@R: 
-    person("John", "Mulvey", , "john.mulvey@sund.ku.dk", role = c("aut", "cre"),
+    person("John", "Mulvey", , "john.mulvey@sund.ku.dk", role = c("aut", "cre", "cph"),
            comment = c(ORCID = "0000-0003-3843-2442"))
 Description: Allocates a set of pre-selected samples to experimental batches, in a way that seeks to maximise the balance of a specified 
     set of covariates across the batches whilst also allowing blocking of samples if desired. This will allow for downstream batch correction 
-    to be performed without confounding with experimentally relevant covariates.We envision the primary use case to be for -omics 
+    to be performed without confounding with experimentally relevant covariates. We envision the primary use case to be for -omics 
     experiments of a large number of clinical samples, but the methods are broadly applicable to any type of assay or other situations 
     where the value of potentially confounding covaraites are measured for each experimental unit.
 License: GPL (>= 3)
