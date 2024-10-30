@@ -132,7 +132,7 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
     data_padded <- pad_samples(data, batch_size)
 
     # Randomly allocate a layout
-      batch_allocations <- sample(rep(1:batch_n_needed, times = batch_size), batch_n_needed*batch_size, replace = FALSE)
+    batch_allocations <- sample(rep(1:batch_n_needed, times = batch_size), batch_n_needed*batch_size, replace = FALSE)
     names(batch_allocations) <- data_padded$sample_id  # Set the names to "batch_allocations"
 
     data_padded$batch_allocation <- as.factor(batch_allocations)
@@ -409,6 +409,9 @@ allocate_samples <- function(data,
     if (!blocking_variable %in% data_columns) {
       stop("Blocking variable is not a valid column name in the data.")
     }
+    if (!id_column %in% data_columns) {
+      stop("id_column is not a valid column name in the data.")
+    }
       # Check if the maximum number of rows per level of blocking_variable is less than half the batch_size
    if (max(table(data[[blocking_variable]])) >= (batch_size / 2)) {
     stop("The maximum number of rows for a single level of the blocking variable exceeds half the batch size - there is little flexibility to create bias free layouts.")
@@ -456,7 +459,7 @@ allocate_samples <- function(data,
   } else {
     stop("Invalid method specified")
   }
-  # join the ouput with the original data
+  # join the output with the original data
   output$layout = output$layout %>%
     left_join(original_data)
 
