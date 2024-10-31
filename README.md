@@ -27,11 +27,16 @@ optimal_layout_blocked = allocate_samples(toy_data,
 ```
 
 The resulting object contains 
-- the original input data supplied the allocated batch appended
+- the original input data supplied, with the allocated batch appended
 - results of testing the balance of each covariate between batches
-- data for the optimisation process, if the method used was the default "simulated_annealing"
+- data for the optimisation process to confirm that the method has converged, if the method used was the default "simulated_annealing"
 
 As a simple sanity check, the values of the covariates can be visualised using the `plot_layout` function:
 ```r
 plot_layout(optimal_layout_blocked, covariates = c("covariate1", "covariate2", "covariate3"))
+```
+
+The allocated layout can be saved to file, for example by:
+```r
+write.csv(optimal_layout_blocked[["layout"]], "optimal_layout.csv", row.names = FALSE)
 ```
