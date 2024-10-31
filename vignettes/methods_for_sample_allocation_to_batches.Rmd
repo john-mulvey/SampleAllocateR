@@ -1,8 +1,8 @@
 ---
-title: "methods_for_sample_allocation_to_batches"
+title: "Methods for Allocating Samples to Batches"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{methods_for_sample_allocation_to_batches}
+  %\VignetteIndexEntry{Methods for Allocating Samples to Batches}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 #bibliography: references.bib
