@@ -71,10 +71,13 @@
 <span>                                 blocking_variable <span class="op">=</span> <span class="st">"block_id"</span>,</span>
 <span>                                 iterations <span class="op">=</span> <span class="fl">1000</span>,</span>
 <span>                                 method <span class="op">=</span> <span class="st">"simulated_annealing"</span><span class="op">)</span></span></code></pre></div>
-<p>The resulting object contains - the original input data supplied the allocated batch appended - results of testing the balance of each covariate between batches - data for the optimisation process, if the method used was the default “simulated_annealing”</p>
+<p>The resulting object contains - the original input data supplied, with the allocated batch appended - results of testing the balance of each covariate between batches - data for the optimisation process to confirm that the method has converged, if the method used was the default “simulated_annealing”</p>
 <p>As a simple sanity check, the values of the covariates can be visualised using the <code>plot_layout</code> function:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/plot_layout.html">plot_layout</a></span><span class="op">(</span><span class="va">optimal_layout_blocked</span>, covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"covariate1"</span>, <span class="st">"covariate2"</span>, <span class="st">"covariate3"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p>The allocated layout can be saved to file, for example by:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/write.table.html" class="external-link">write.csv</a></span><span class="op">(</span><span class="va">optimal_layout_blocked</span><span class="op">[[</span><span class="st">"layout"</span><span class="op">]</span><span class="op">]</span>, <span class="st">"optimal_layout.csv"</span>, row.names <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
 </div>
 
   </main><aside class="col-md-3"><div class="license">
