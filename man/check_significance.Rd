@@ -27,7 +27,7 @@ allocated_data <- allocate_samples(data = my_data,
                                    method = "simulated_annealing",
                                    covariates = c("covariate1", "covariate2", "covariate3"),
                                    batch_size = 13)
-                                   
+
 significant_covariates <- check_significance(allocated_data)
 
 }

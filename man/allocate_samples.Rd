@@ -15,7 +15,8 @@ allocate_samples(
   temperature = 1,
   cooling_rate = 0.975,
   seed = 123,
-  plot_convergence = TRUE
+  plot_convergence = TRUE,
+  collapse_rare_factors = FALSE
 )
 }
 \arguments{
@@ -40,6 +41,9 @@ allocate_samples(
 \item{seed}{An integer used for setting the seed to ensure reproducibility. The default is 123.}
 
 \item{plot_convergence}{= TRUE A logical indicating whether to plot the convergence of the optimisation process, only relevant if the method specified is "simulated_annealing". The default is \code{TRUE}.}
+
+\item{collapse_rare_factors}{= FALSE A logical indicating whether to collapse rare factor levels in the covariates. The default is \code{FALSE}. Factor levels that are present with counts either less than 5 or in 0.05*batch_size are collapsed into a single level "other".
+Please note that the layout returned will contain these collapsed factor levels, rather than your original input data.}
 }
 \value{
 An object containing the allocation layout of samples to batches, along with any specified blocking and covariate adjustments. The exact structure of the return value depends on the allocation method used.
