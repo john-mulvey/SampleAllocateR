@@ -366,6 +366,8 @@ simulate_annealing <- function(data,
 #' @param cooling_rate A numeric specifying the cooling rate for the simulated annealing method. The default is 0.975.
 #' @param seed An integer used for setting the seed to ensure reproducibility. The default is 123.
 #' @param plot_convergence = TRUE A logical indicating whether to plot the convergence of the optimisation process, only relevant if the method specified is "simulated_annealing". The default is `TRUE`.
+#' @param collapse_rare_factors = FALSE A logical indicating whether to collapse rare factor levels in the covariates. The default is `FALSE`. Factor levels that are present with counts either less than 5 or in 0.05*batch_size are collapsed into a single level "other".
+#'  Please note that the layout returned will contain these collapsed factor levels, rather than your original input data.
 #'
 #' @return An object containing the allocation layout of samples to batches, along with any specified blocking and covariate adjustments. The exact structure of the return value depends on the allocation method used.
 #'
@@ -397,7 +399,8 @@ allocate_samples <- function(data,
                              temperature = 1,
                              cooling_rate = 0.975,
                              seed = 123,
-                             plot_convergence = TRUE) {
+                             plot_convergence = TRUE,
+                             collapse_rare_factors = FALSE) {
 
   # Valid input
   if (!is.data.frame(data)) {
@@ -420,6 +423,10 @@ allocate_samples <- function(data,
 
   if (batch_size > nrow(data)) {
     stop("batch_size cannot be larger than the number of samples")
+  }
+
+  if (!is.logical(collapse_rare_factors)) {
+    stop("collapse_rare_factors must be TRUE or FALSE")
   }
 
   # Validate simulated annealing parameters
@@ -465,21 +472,54 @@ allocate_samples <- function(data,
   }
   }
 
-  # subset data to only include covariates and blocking variable
-  relevant_columns <- if (missing(blocking_variable) || is.na(blocking_variable) || blocking_variable == "") {
-    c(covariates, "sample_id")
-  } else {
-    c(covariates, blocking_variable, "sample_id")
-  }
-  original_data <- data
-  data <- data[, relevant_columns]
-
   # convert any logical covaritates to factors
   for (covariate in names(data)) {
     if (is.logical(data[[covariate]])) {
       data[[covariate]] <- factor(data[[covariate]])
     }
   }
+
+  # collapse rare factor levels
+  if (collapse_rare_factors) {
+    min_count <- max(5, ceiling(batch_size * 0.05))
+
+    for (col in covariates) {
+      if (is.factor(data[[col]])) {
+        # Calculate counts of each level
+        level_counts <- table(data[[col]])
+
+        # Identify rare levels (count < min_count)
+        rare_levels <- names(level_counts)[level_counts < min_count]
+
+        if (length(rare_levels) > 0) {
+          # Create a new factor with rare levels collapsed
+          data[[col]] <- droplevels(factor(ifelse(data[[col]] %in% rare_levels,
+                                                  "other",
+                                                  as.character(data[[col]]))))
+
+          # Print information about collapsed levels
+          message(sprintf("Collapsed %d rare levels in %s (counts < %d): %s\nCounts were: %s",
+                          length(rare_levels),
+                          col,
+                          min_count,
+                          paste(rare_levels, collapse = ", "),
+                          paste(paste(rare_levels, level_counts[rare_levels], sep=": "),
+                                collapse=", ")))
+
+        }
+      }
+    }
+  }
+
+  # subset data to only include covariates and blocking variable
+  relevant_columns <- if (missing(blocking_variable) || is.na(blocking_variable) || blocking_variable == "") {
+    c(covariates, "sample_id")
+  } else {
+    c(covariates, blocking_variable, "sample_id")
+  }
+
+  original_data <- data
+  data <- data[, relevant_columns]
 
   # print a summary of the provided data, to facilitate the user checking they have specified everything as expected
   for (covariate in covariates) {
