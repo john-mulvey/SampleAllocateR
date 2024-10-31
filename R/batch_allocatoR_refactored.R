@@ -1,4 +1,11 @@
 ## ---------------------------------------------------------------------------------------------------------------------------------
+# prevent R CMD check warning about missing visible binding for global varaiables (due to non standard evaluation by dplyr)
+utils::globalVariables(c(
+  "Temperature", "Value", "Variable", "adj_p_value", "batch", "batch_allocation", "covariate", "joint_probablity", "objective_value",
+  "p_value", "sample_id", "value"
+))
+
+## ---------------------------------------------------------------------------------------------------------------------------------
 #' Simulate Data with Optional Blocking
 #'
 #' This function generates a simulated dataset containing a specified number of samples. Users can optionally specify block sizes to group samples into blocks. If the total number of samples is not a multiple of the block size, additional samples are generated to complete the last block.
@@ -100,38 +107,38 @@ test_covariates = function(layout, blocking_variable = "block_id"){
   continuous_vars <- continuous_vars[!continuous_vars %in% c("batch_allocation", blocking_variable)]
 
   test_results_continuous <- layout %>%
-    mutate(batch = batch_allocation) %>%
-    select(-sample_id) %>%
-    pivot_longer(cols = all_of(continuous_vars), names_to = "covariate", values_to = "value") %>%
-    group_by(covariate) %>%
-    summarise(p_value =  kruskal.test(value ~ batch)$p.value)
+    dplyr::mutate(batch = batch_allocation) %>%
+    dplyr::select(-sample_id) %>%
+    tidyr::pivot_longer(cols = all_of(continuous_vars), names_to = "covariate", values_to = "value") %>%
+    dplyr::group_by(covariate) %>%
+    dplyr::summarise(p_value =  kruskal.test(value ~ batch)$p.value)
 
   # test for differences in categorical covariates between batches
   factor_vars <- names(layout)[sapply(layout, is.factor)]
   factor_vars <- factor_vars[!factor_vars %in% c("batch_allocation", blocking_variable)]
 
   test_results_factor <- layout %>%
-    mutate(batch = batch_allocation) %>%
-    select(-sample_id) %>%
-    pivot_longer(cols = all_of(factor_vars), names_to = "covariate", values_to = "value") %>%
-    group_by(covariate) %>%
-    summarise(p_value = {
+    dplyr::mutate(batch = batch_allocation) %>%
+    dplyr::select(-sample_id) %>%
+    tidyr::pivot_longer(cols = all_of(factor_vars), names_to = "covariate", values_to = "value") %>%
+    dplyr::group_by(covariate) %>%
+    dplyr::summarise(p_value = {
       contingency_table <- table(droplevels(value), batch)
       if (sum(rowSums(contingency_table) == 0) > 0) {
         NA
       } else {
-        fisher.test(contingency_table, simulate.p.value = TRUE)$p.value
+        stats::fisher.test(contingency_table, simulate.p.value = TRUE)$p.value
       }
     })
 
   # Combine the results for continuous and factor variables and reformat
-  test_results <- bind_rows(test_results_continuous, test_results_factor)
+  test_results <- dplyr::bind_rows(test_results_continuous, test_results_factor)
 
   # Combine the results for continuous and factor variables and reformat
-  test_results <- bind_rows(test_results_continuous, test_results_factor)
+  test_results <- dplyr::bind_rows(test_results_continuous, test_results_factor)
 
   result_table <- test_results %>%
-    pivot_wider(names_from = covariate, values_from = p_value)
+    tidyr::pivot_wider(names_from = covariate, values_from = p_value)
 
   return(test_results)
 
@@ -195,7 +202,7 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
     empty_rows$sample_id <- paste0("padding", seq_len(nrow(empty_rows)))
 
     # Step 4: Append new rows to data_blocked
-    data_blocked <- bind_rows(data_blocked, empty_rows)
+    data_blocked <- dplyr::bind_rows(data_blocked, empty_rows)
 
     layout = data_blocked
   }
@@ -322,13 +329,13 @@ simulate_annealing <- function(data,
     scaleFactor <- max(optimisation_data$objective_value) / max(optimisation_data$temperature)
 
     optimisation_plot = optimisation_data %>%
-      mutate(Temperature = temperature * scaleFactor) %>%
+      dplyr::mutate(Temperature = temperature * scaleFactor) %>%
       dplyr::rename(joint_probablity = objective_value) %>%
-      gather(key = "Variable", value = "Value", joint_probablity, Temperature) %>%
-      ggplot(aes(x = iteration, y = Value, color = Variable)) +
-        geom_line() +
-        ggtitle("Optimisation data") +
-        scale_y_continuous(name = "joint_probablity",
+      tidyr::gather(key = "Variable", value = "Value", joint_probablity, Temperature) %>%
+      ggplot2::ggplot(ggplot2::aes(x = iteration, y = Value, color = Variable)) +
+        ggplot2::geom_line() +
+        ggplot2::ggtitle("Optimisation data") +
+        ggplot2::scale_y_continuous(name = "joint_probablity",
                            sec.axis = sec_axis(~./scaleFactor, name = "Temperature"))
 
     print(optimisation_plot)
@@ -548,7 +555,7 @@ allocate_samples <- function(data,
   }
   # join the output with the original data
   output$layout = output$layout %>%
-    left_join(original_data) %>%
+    dplyr::left_join(original_data) %>%
     dplyr::rename_with(~ id_column, .cols = "sample_id")
 
   return(output)
@@ -617,16 +624,16 @@ plot_layout <- function(output, id_column = "sample_id", covariates) {
   }
 
   layout = layout %>%
-    select({{id_column}}, batch_allocation, all_of(covariates))
+    dplyr::select({{id_column}}, batch_allocation, all_of(covariates))
 
   # continuous covariates
   continuous_plot = layout %>%
     dplyr::rename(batch = batch_allocation) %>%
     dplyr::select(where(is.numeric) | {{id_column}}, batch) %>%
-    pivot_longer(cols = !c({{id_column}}, batch), names_to = "covariate", values_to = "value") %>%
-    ggplot(aes(x = batch, y = value)) +
-      geom_point() +
-      facet_wrap(~ covariate)
+    tidyr::pivot_longer(cols = !c({{id_column}}, batch), names_to = "covariate", values_to = "value") %>%
+    ggplot2::ggplot(ggplot2::aes(x = batch, y = value)) +
+      ggplot2::geom_point() +
+      ggplot2::facet_wrap(~ covariate)
 
   print(continuous_plot)
 
@@ -634,11 +641,11 @@ plot_layout <- function(output, id_column = "sample_id", covariates) {
   categorical_plot = layout %>%
     dplyr::rename(batch = batch_allocation) %>%
     dplyr::select(where(is.factor) | {{id_column}}, batch) %>%
-    pivot_longer(cols = !c(id_column, batch), names_to = "covariate", values_to = "value") %>%
+    tidyr::pivot_longer(cols = !c(id_column, batch), names_to = "covariate", values_to = "value") %>%
     droplevels() %>%
-    group_by(covariate, value, batch) %>%
-    summarise(n = n()) %>%
-    ggplot(aes(x = batch, y = n, fill = value)) +
+    dplyr::group_by(covariate, value, batch) %>%
+    dplyr::summarise(n = n()) %>%
+    ggplot2::ggplot(aes(x = batch, y = n, fill = value)) +
       geom_col()  +
       facet_wrap(~ covariate)
 
@@ -692,9 +699,9 @@ check_significance <- function(output) {
   }
 
   n_significant_covariates = result_table %>%
-    mutate(adj_p_value = p.adjust(p_value, method = "bonferroni")) %>%
-    filter(adj_p_value < 0.05) %>%
-    count(covariate)
+    dplyr::mutate(adj_p_value = p.adjust(p_value, method = "bonferroni")) %>%
+    dplyr::filter(adj_p_value < 0.05) %>%
+    dplyr::count(covariate)
 
   if (nrow(n_significant_covariates) == 0) {
     cat("No significant covariates\n")
