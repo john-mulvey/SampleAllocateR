@@ -19,7 +19,7 @@ knitr::opts_chunk$set(
 ```
 
 
-# packages
+
 ```{r setup, message=FALSE, warning=FALSE, echo=FALSE}
 library(SampleAllocateR)
 library(dplyr)
