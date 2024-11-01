@@ -200,25 +200,6 @@ In order to easily get an overview of the balance of a particular layout (a usef
 plot_layout(optimal_layout_blocked, covariates = c("covariate1", "covariate2", "covariate3"))
 ```
 
-```{r}
-table(optimal_layout_blocked$layout$batch_allocation)
-
-
-tmp = allocate_single_random(data = toy_data, 
-                       batch_size = 13, 
-                       blocking_variable = "block_id")
-
-table(tmp$layout$batch_allocation)
-
-tmp2 = allocate_best_random(data = toy_data, 
-                       batch_size = 13, 
-                       blocking_variable = "block_id",
-                       iterations = 100)
-
-table(tmp2$layout$batch_allocation)
-```
-
-
 
 # session info
 ```{r}
