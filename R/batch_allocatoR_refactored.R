@@ -216,7 +216,7 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------------------
-#' Calculate Balance Score Using Fisher's method for combining p-values
+#' Calculate Balance Score
 #'
 #' This function calculates a covariate balance score by calculating the harmonic mean of the p-values from individual covariate balance tests.
 #' This does not require the assumptions that the covariates are independent.
