@@ -1,7 +1,7 @@
 ## ---------------------------------------------------------------------------------------------------------------------------------
-# prevent R CMD check warning about missing visible binding for global varaiables (due to non standard evaluation by dplyr)
+# prevent R CMD check warning about missing visible binding for global varaiables (due to non-standard evaluation by dplyr)
 utils::globalVariables(c(
-  "Temperature", "Value", "Variable", "adj_p_value", "batch", "batch_allocation", "covariate", "joint_probablity", "objective_value",
+  "Temperature", "Value", "Variable", "adj_p_value", "batch", "batch_allocation", "covariate", "balance_score", "objective_value",
   "p_value", "sample_id", "value"
 ))
 
@@ -167,7 +167,7 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
   } else {
 
     # check if all blocks are the same size, and stop and print a warning statement if not
-    block_size = table(data_blocked$block_id)
+    block_size = table(data[[blocking_variable]])
     all(block_size == block_size[1])
     if (!all(block_size == block_size[1])) {
       stop("Blocks are not all the same size, which is a current requirement of the method")
@@ -176,18 +176,18 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
     # Calculate the actual number of batches etc needed based on constraints
     block_size = block_size[1]
     batches_needed <- ceiling(n_samples / (floor(batch_size / block_size) * block_size))
-    n_blocks <- length(unique(data_blocked$block_id))
+    n_blocks <- length(unique(data[[blocking_variable]]))
 
     # Generate a random assignment of batch numbers for each block
     batch_assignments <- rep(1:batches_needed, each = ceiling(n_blocks / batches_needed)) %>%
       sample(size = n_blocks)
-    batch_assignments <- setNames(batch_assignments, unique(data_blocked$block_id))
-    #data_blocked$batch_allocation <- NA
-    data_blocked$batch_allocation <- unlist(lapply(data_blocked$block_id, function(id) batch_assignments[id])) %>%
+    batch_assignments <- setNames(batch_assignments, unique(data[[blocking_variable]]))
+
+    data$batch_allocation <- unlist(lapply(data[[blocking_variable]], function(id) batch_assignments[id])) %>%
       as.factor()
 
     # pad empty slots
-    actual_samples_per_batch <- table(data_blocked$batch_allocation)
+    actual_samples_per_batch <- table(data$batch_allocation)
     unfilled_spots <- batch_size - actual_samples_per_batch # Assuming each batch should have 13 samples
 
     # Step 3: Create new rows for unfilled spots
@@ -195,16 +195,16 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
       if (unfilled_spots[batch] > 0) {
         empty_row <- as.data.frame(matrix(NA, nrow = unfilled_spots[batch], ncol = ncol(data)))
         colnames(empty_row) <- colnames(data)
-        empty_row$batch_allocation <- factor(rep(batch, unfilled_spots[batch]), levels = levels(data_blocked$batch_allocation))
+        empty_row$batch_allocation <- factor(rep(batch, unfilled_spots[batch]), levels = levels(data$batch_allocation))
         return(empty_row)
       }
     }))
     empty_rows$sample_id <- paste0("padding", seq_len(nrow(empty_rows)))
 
-    # Step 4: Append new rows to data_blocked
-    data_blocked <- dplyr::bind_rows(data_blocked, empty_rows)
+    # Step 4: Append new rows to data
+    data <- dplyr::bind_rows(data, empty_rows)
 
-    layout = data_blocked
+    layout = data
   }
 
   # Test for covariate balance
@@ -216,18 +216,71 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------------------
+#' Calculate Balance Score Using Fisher's method for combining p-values
+#'
+#' This function calculates a covariate balance score by calculating the harmonic mean of the p-values from individual covariate balance tests.
+#' This does not require the assumptions that the covariates are independent.
+#'
+#' @param p_values A numeric vector containing p-values from individual covariate balance tests.
+#'   All values must be between 0 and 1.
+#' @param na.rm Logical; if TRUE (default), NA values are removed before calculation.
+#'   If FALSE and NA values are present, the function will return NA.
+#'
+#' @return A numeric value representing the overall balance score.
+#'   Higher values indicate better covariate balance.
+#'
+#'
+#' @examples
+#' # Example with well-balanced covariates
+#' p_vals <- c(0.8, 0.9, 0.85)
+#' calculate_balance_score(p_vals)
+#'
+#' # Example with poorly balanced covariates
+#' p_vals <- c(0.01, 0.02, 0.03)
+#' calculate_balance_score(p_vals)
+#'
+#' # Handling NA values
+#' p_vals_with_na <- c(0.8, NA, 0.85)
+#' calculate_balance_score(p_vals_with_na, na.rm = TRUE)
+#'
+#' @export
+
+calculate_balance_score = function(p_values, na.rm = TRUE){
+  # remove NA values if present
+  if(na.rm){
+    p_values = p_values[!is.na(p_values)]
+  }
+  else if(any(is.na(p_values))){
+    return(NA)
+  }
+
+  # harmonic mean
+  harmonic_mean = 1 / mean(1/p_values)
+
+  return(harmonic_mean)
+}
+
+## ---------------------------------------------------------------------------------------------------------------------------------
 allocate_best_random <- function(data, batch_size, iterations, blocking_variable = NA) {
 
   # Allocate the number of layouts specified by "iterations"
-  many_layouts <- replicate(iterations, allocate_single_random(data, batch_size = batch_size, blocking_variable = blocking_variable), simplify = FALSE)
+  many_layouts <- replicate(iterations,
+                            allocate_single_random(data,
+                                                   batch_size = batch_size,
+                                                   blocking_variable = blocking_variable),
+                            simplify = FALSE)
 
-  # Return the layout with the highest joint probability
-  best_layout <- many_layouts[[which.max(sapply(many_layouts, function(x) prod(x$results$p_value, na.rm = TRUE)))]]$layout %>%
+  # calculate balance score for each layout
+  balance_scores <- sapply(many_layouts, function(x) calculate_balance_score(x$results$p_value))
+
+  # Return the layout with the highest balance score
+  index_of_best = which.max(balance_scores)
+  best_layout <- many_layouts[[index_of_best]]$layout %>%
     mutate(batch_allocation = as.factor(batch_allocation))
 
-  best_layout_result <- many_layouts[[which.max(sapply(many_layouts, function(x) prod(x$results$p_value, na.rm = TRUE)))]]$result
+  best_layout_result <- many_layouts[[index_of_best]]$results
 
-  cat("Joint probability that the best layout is balanced:", prod(best_layout_result$p_value, na.rm = TRUE), "\n")
+  cat("Balance Score:", calculate_balance_score(best_layout_result$p_value), "\n")
 
   # Return the layout
   return(list(layout = best_layout,
@@ -247,15 +300,23 @@ simulate_annealing <- function(data,
   # Step 1: Define the objective function to minimize the sum of p-values
   objective <- function(layout_inc_data, blocking_variable = blocking_variable) {
     metrics <- test_covariates(layout_inc_data, blocking_variable = blocking_variable)
-    return(prod(metrics$p_value))
+    balance_score <- calculate_balance_score(metrics$p_value)
+    return(balance_score)
   }
 
   # Step 2: simulate annealing
   # inital conditions
-  current_arrangement <- allocate_single_random(data, batch_size)$layout
-  batch_n_needed <- length(levels(current_arrangement$batch_allocation))
-  current_value <- objective(current_arrangement, blocking_variable = blocking_variable)
+  if(is.na(blocking_variable)){
+    current_arrangement <- allocate_single_random(data, batch_size)$layout
+  }
+  else{
+    current_arrangement <- allocate_single_random(data, batch_size, blocking_variable = blocking_variable)$layout
+  }
 
+  batch_n_needed <- length(levels(current_arrangement$batch_allocation))
+  initial_value <- objective(current_arrangement, blocking_variable = blocking_variable)
+
+  current_value <- initial_value
   # define a vectors to store values over time
   optimisation_data <- data.frame(iteration = numeric(iterations),
                                   temperature = numeric(iterations),
@@ -292,13 +353,13 @@ simulate_annealing <- function(data,
       # if samples are blocked, swap two blocks between batch_a and batch_b
       ## Choose a block at random from batch_a and batch_b
       batch_a_samples <- which(current_arrangement$batch_allocation == batch_a)
-      batch_a_block_id <- current_arrangement$block_id[sample(batch_a_samples, 1)]
+      batch_a_block_id <- current_arrangement[[blocking_variable]][sample(batch_a_samples, 1)]
       batch_b_samples <- which(current_arrangement$batch_allocation == batch_b)
-      batch_b_block_id <- current_arrangement$block_id[sample(batch_b_samples, 1)]
+      batch_b_block_id <- current_arrangement[[blocking_variable]][sample(batch_b_samples, 1)]
 
       ## Find all samples with the same block_id as the chosen samples in both batches
-      batch_a_block_samples <- which(current_arrangement$block_id == batch_a_block_id)
-      batch_b_block_samples <- which(current_arrangement$block_id == batch_b_block_id)
+      batch_a_block_samples <- which(current_arrangement[[blocking_variable]] == batch_a_block_id)
+      batch_b_block_samples <- which(current_arrangement[[blocking_variable]] == batch_b_block_id)
 
       ## Create a copy of the current arrangement to modify
       neighbor_arrangement <- current_arrangement
@@ -314,7 +375,7 @@ simulate_annealing <- function(data,
     delta_value <- neighbor_value - current_value
 
     # Decide whether to accept the neighbor
-    if (delta_value > 0 || runif(1) < exp(delta_value / temperature)) { #&& constraint(neighbor_arrangement)
+    if (delta_value > 0 || runif(1) < exp(delta_value / temperature)) {
       current_arrangement <- neighbor_arrangement
       current_value <- neighbor_value
     }
@@ -330,12 +391,12 @@ simulate_annealing <- function(data,
 
     optimisation_plot = optimisation_data %>%
       dplyr::mutate(Temperature = temperature * scaleFactor) %>%
-      dplyr::rename(joint_probablity = objective_value) %>%
-      tidyr::gather(key = "Variable", value = "Value", joint_probablity, Temperature) %>%
+      dplyr::rename(balance_score = objective_value) %>%
+      tidyr::gather(key = "Variable", value = "Value", balance_score, Temperature) %>%
       ggplot2::ggplot(ggplot2::aes(x = iteration, y = Value, color = Variable)) +
         ggplot2::geom_line() +
         ggplot2::ggtitle("Optimisation data") +
-        ggplot2::scale_y_continuous(name = "joint_probablity",
+        ggplot2::scale_y_continuous(name = "Balance Score",
                            sec.axis = sec_axis(~./scaleFactor, name = "Temperature"))
 
     print(optimisation_plot)
@@ -345,7 +406,7 @@ simulate_annealing <- function(data,
   optimal_layout <- current_arrangement
   optimal_value <- current_value
 
-  cat("Joint probability that the final layout is balanced:", optimal_value, "\n")
+  cat("Balance Score of final layout:", optimal_value, "\n")
 
   # test covaraite balance of final layout
   optimal_layout_result = test_covariates(optimal_layout, blocking_variable = blocking_variable)
