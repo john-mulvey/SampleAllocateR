@@ -311,6 +311,53 @@ simulate_annealing <- function(data,
   }
   else{
     current_arrangement <- allocate_single_random(data, batch_size, blocking_variable = blocking_variable)$layout
+
+    # block_size = table(current_arrangement[[blocking_variable]])[[1]]
+    #
+    # # count the number of padding samples in each block
+    # n_padding_samples <- current_arrangement %>%
+    #   filter(grepl("padding", sample_id)) %>%
+    #   group_by(batch_allocation) %>%
+    #   summarise(n = n()) %>%
+    #   mutate(m = n %/% block_size)
+    #
+    # # For all batches with padding samples, assign padding samples to a level of "blocking_varaible" if possible
+    # for (batch in n_padding_samples$batch_allocation[n_padding_samples$m > 0]) {
+    #   # Get padding samples for this batch
+    #   padding_samples <- current_arrangement %>%
+    #     filter(batch_allocation == batch,
+    #            grepl("padding", sample_id))
+    #
+    #   # Number of complete blocks we can make
+    #   n_blocks <- nrow(padding_samples) %/% block_size
+    #
+    #   # Randomly assign block numbers to these samples
+    #   if (n_blocks > 0) {
+    #     # Create vector of block assignments
+    #     block_assignments <- paste0("empty_block_", batch, "_", rep(1:n_blocks, each = block_size))
+    #
+    #     # If there are any remaining samples, they keep their original block_id
+    #     if (nrow(padding_samples) > length(block_assignments)) {
+    #       block_assignments <- c(block_assignments,
+    #                              rep(NA, nrow(padding_samples) - length(block_assignments)))
+    #     }
+    #
+    #     # Randomly assign the blocks
+    #     block_assignments <- sample(block_assignments)
+    #     # Replace NA with original block_id
+    #     padding_indices <- which(grepl("padding", current_arrangement$sample_id) &
+    #                                current_arrangement$batch_allocation == batch)
+    #
+    #     # Add the new levels to the factor before assignment
+    #     current_arrangement[[blocking_variable]] <- factor(current_arrangement[[blocking_variable]],
+    #                                            levels = union(levels(current_arrangement[[blocking_variable]]),
+    #                                                           unique(block_assignments[!is.na(block_assignments)])))
+    #
+    #     # assign
+    #     current_arrangement[[blocking_variable]][padding_indices] <- block_assignments
+    #   }
+    # }
+
   }
 
   batch_n_needed <- length(levels(current_arrangement$batch_allocation))
@@ -352,9 +399,11 @@ simulate_annealing <- function(data,
     } else {
       # if samples are blocked, swap two blocks between batch_a and batch_b
       ## Choose a block at random from batch_a and batch_b
-      batch_a_samples <- which(current_arrangement$batch_allocation == batch_a)
+      batch_a_samples <- which(current_arrangement$batch_allocation == batch_a &
+                                 !is.na(current_arrangement[[blocking_variable]]))
       batch_a_block_id <- current_arrangement[[blocking_variable]][sample(batch_a_samples, 1)]
-      batch_b_samples <- which(current_arrangement$batch_allocation == batch_b)
+      batch_b_samples <- which(current_arrangement$batch_allocation == batch_b &
+                                 !is.na(current_arrangement[[blocking_variable]]))
       batch_b_block_id <- current_arrangement[[blocking_variable]][sample(batch_b_samples, 1)]
 
       ## Find all samples with the same block_id as the chosen samples in both batches
@@ -689,10 +738,9 @@ plot_layout <- function(output, id_column = "sample_id", covariates) {
 
   # continuous covariates
   continuous_plot = layout %>%
-    dplyr::rename(batch = batch_allocation) %>%
-    dplyr::select(where(is.numeric) | {{id_column}}, batch) %>%
-    tidyr::pivot_longer(cols = !c({{id_column}}, batch), names_to = "covariate", values_to = "value") %>%
-    ggplot2::ggplot(ggplot2::aes(x = batch, y = value)) +
+    dplyr::select(where(is.numeric) | {{id_column}}, batch_allocation) %>%
+    tidyr::pivot_longer(cols = !c({{id_column}}, batch_allocation), names_to = "covariate", values_to = "value") %>%
+    ggplot2::ggplot(ggplot2::aes(x = batch_allocation, y = value)) +
       ggplot2::geom_point() +
       ggplot2::facet_wrap(~ covariate)
 
@@ -700,13 +748,12 @@ plot_layout <- function(output, id_column = "sample_id", covariates) {
 
 # categorical covariates
   categorical_plot = layout %>%
-    dplyr::rename(batch = batch_allocation) %>%
-    dplyr::select(where(is.factor) | {{id_column}}, batch) %>%
-    tidyr::pivot_longer(cols = !c(id_column, batch), names_to = "covariate", values_to = "value") %>%
+    dplyr::select(where(is.factor) | {{id_column}}, batch_allocation) %>%
+    tidyr::pivot_longer(cols = !c(id_column, batch_allocation), names_to = "covariate", values_to = "value") %>%
     droplevels() %>%
-    dplyr::group_by(covariate, value, batch) %>%
+    dplyr::group_by(covariate, value, batch_allocation) %>%
     dplyr::summarise(n = n()) %>%
-    ggplot2::ggplot(aes(x = batch, y = n, fill = value)) +
+    ggplot2::ggplot(aes(x = batch_allocation, y = n, fill = value)) +
       geom_col()  +
       facet_wrap(~ covariate)
 

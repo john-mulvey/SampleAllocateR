@@ -5,8 +5,8 @@ vignette: >
   %\VignetteIndexEntry{Methods for Allocating Samples to Batches}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
-#bibliography: references.bib
-#csl: path/to/your/csl-style.csl
+# bibliography: references.bib
+# csl: path/to/your/csl-style.csl
 ---
 
 ```{r, include = FALSE}
@@ -28,7 +28,9 @@ library(ggplot2)
 
 
 # Introduction
-Especially as the costs of performing assays has decreased, there has been a move from analysing few samples from carefully controlled experiments to analysing samples directly from patient population of interest. Controlled experiments are performed in experimental model systems in order that covariates can be held constant across all experimental units, whereas in clinical samples there will commonly be number of covariates that also impact upon the dependent variable of interest. Performing assays on a large number of samples requires that the be analysed in _batches_, which results in technical variation that should be accounted for in the analysis. Here we demonstrate a tool to allocate pre-selectedsamples to these technical batches in a way that maximises the balance of specified covariates. By maximising our ability to estimate the effects of the batch and the specified covaraites, this facilitates best estimation of the effect of the dependent variable of interest.
+Especially as the costs of performing assays has decreased, there has been a move from analysing few samples from carefully controlled experiments to analysing many samples directly from patient population of interest. Controlled experiments are performed in experimental model systems in order that covariates can be held constant across all experimental units, whereas in clinical samples there will commonly be number of covariates that also impact upon the dependent variable of interest. Performing assays on a large number of samples requires that the be analysed in _batches_, which results in technical variation that should be accounted for in the analysis. 
+
+Here we demonstrate a tool to allocate pre-selected samples into these technical batches in a way that maximises the balance of specified covariates. By maximising the balance we maximise our ability to separate technical batch variation from biological effects of interest. This increases the precision of our estimates by reducing the uncertainty in coefficient estimates for our primary predictors variables, and hence gives greater statistical power to detect true effects.
 
 ## Generate some simulated data with covarirates
 First, we generate some simulated data with covariates. We will generate 98 samples with 3 covariates, and then allocate these samples to batches of 13.
@@ -40,9 +42,9 @@ head(toy_data)
 
 
 ## Randomisation
-A common approach reported in the analysis of clinical samples is to simply randomise samples to different batches. Randomisation is frequently used in clinical trials to ensure that the treatment groups are balanced with respect to known and unknown covariates. In this circumstance, covariates for all patients are not known at the time when treatments are allocated and so is our best chance to ensure that the treatment groups are balanced with respect to these covariates. In statistical terms, there is no bias: the expectation of the value of any given covariates would be equal for both a control and a treatment group:  i.e. that if we repeated the experiment many times, the average value of the covariate would be the same for both groups.
+A common approach reported in the analysis of clinical samples is to simply randomise samples to different batches. Randomisation is frequently used in clinical trials to try to ensure that the treatment groups are balanced with respect to relevant covariates. In this circumstance, covariates for all patients are not known at the time when treatments are allocated and so randomisation our best option to ensure that the control and treatment groups are balanced with respect to these covariates. In statistical terms, there is no bias: the expectation of the value of any given covariates would be equal for both a control and a treatment group: i.e. that if we repeated the experiment many times, the average value of the covariate would be the same for both groups.
 
-We can simply generate a single random layout of our toy dataset of 98 samples to a batch size of 13 as follows:
+We can simply generate a random layout of our toy dataset of 98 samples to a batch size of 13 as follows:
 ```{r}
 single_layout = allocate_samples(toy_data,
                                  batch_size = 13,
@@ -50,20 +52,21 @@ single_layout = allocate_samples(toy_data,
                                  method = "random",
                                  blocking_variable = NA)
 
-head(single_layout)
+head(single_layout$layout)
 ```
-The function `allocate_samples` returns a list with the layout of samples to batches in the `layout` slot and the probability that a covaraite does not differ between the batches (appropriate for continuous or categorical variables depending upon the input data type) in the `results` slot.
+The function `allocate_samples` returns a list with the layout of samples to batches in the `layout` slot and the probability that a covaraite does not differ between the batches (appropriate for continuous or categorical variables depending upon the input data type) in the `results` slot. With a given set of samples, the sample size is fixed and thus calculating a _p_-value for the difference in the covariate between the batches is directly related to the underlying test statistic. The `results` slot contains the _p_-value for the difference in each covariate between the batches.
 
 
-We can assess the balance of the layout across all of our specified covariates by calculating the joint probability that all of them do not differ between the batches. Since probabilities are multiplicative, we calcluate this simply at the product of the individual probabilities that each covariate does not differ between the batches.
+We can assess the balance of the layout across all of our specified covariates by calculating a balance score (defined in the following sections). This metric is in the range [0, 1], with higher values indicating better balance. 
 ```{r}
-prod(single_layout[['results']]$p_value)
+calculate_balance_score(single_layout[['results']]$p_value)
 ```
-Here we can see that the joint probability that all of the covariates do not differ between the batches is low, despite the fact that the layout was generated randomly.
+Here we can see that the balance score of our layout is low (indicative of imbalance), despite the fact that the layout was generated randomly. This is because whilst randomisation ensures no statistical bias, it does not remove the impact of chance, in that there is still _variance_ in the balance of the covariates between the batches.
 
 
-In order to get an overview of how good a single random layout is, we can generate a large number of random layouts and examine the distribution of the joint probability that all of the covariates do not differ between the batches. As can be seen in the documentation, the `allocate_samples()` function inculdes a random seed for reproducibility, and so here we explicitly set a series of different random seeds.
+In order to demonstrate this empirically, we can generate a large number of random layouts and examine the distribution of the balance score. As can be seen in the documentation, the `allocate_samples()` function includes a random seed for reproducibility, and so here we explicitly set a series of different random seeds.
 ```{r, message=FALSE, results='hide'}
+set.seed(123)
 random_seeds <- sample(1:10000, 1000, replace = FALSE)
 
 results_list <- lapply(random_seeds, function(seed) {
@@ -92,30 +95,30 @@ plot_data_covariate1 <- do.call(rbind, probability_covariate1)
 # plot histrogram of probability that covariate1 does not differ between the batches
 plot_data_covariate1 %>%
   ggplot(aes(x = p_value)) +
-  geom_histogram(binwidth = 0.01)
+  geom_histogram(binwidth = 0.05, boundary = 0)
 ```
-As expected, we observe a uniform distribution for a single varaible - but note that are still many layouts with a low probability that the covariate does not differ between the batches.
+As expected given the lack of bias that randomisation guarantees, over many iterations we observe a uniform distribution of the _p_-value calcualted for a single variable. But note that within this set of random layouts, there are still many layouts with a low _p_-value: indicating that the covariate is not balanced between the batches despite randomisation.
 
-
-```{r, echo = FALSE, message=FALSE}
-# calculate the joint probability that all of the covariates do not differ between the batches for all of the random layouts
-joint_probability <- lapply(seq_along(results_list), function(i) {
+In order to simultaneously assess the balance of multiple covariates between batches, we combine the _p_-values for all covariates which are each calculated by the appropriate statistical test. For this we used the established approach of calculating the harmonic mean of the _p_-values, which has the advantage over alternative options in that it does not require the restrictive assumption that covariates are independent. The distribution of the balance score across these many random layouts shows that there are few layouts with high score that indicate they are well balanced across all covariates.
+```{r}
+balance_score <- lapply(seq_along(results_list), function(i) {
   data.frame(
     iteration_number = i,
-    joint_probability = prod(results_list[[i]][['results']]$p_value, na.rm = TRUE)
+    balance_score = calculate_balance_score(results_list[[i]][['results']]$p_value)
   )
 })
 
-plot_data_joint_probability <- do.call(rbind, joint_probability)
+plot_data_balance_score <- do.call(rbind, balance_score)
 
-# plot histrogram of joint probability
-plot_data_joint_probability %>%
-  ggplot(aes(x = joint_probability)) +
-  geom_histogram(binwidth = 0.01)
+# plot histrogram of balance scores
+plot_data_balance_score  %>%
+  ggplot(aes(x = balance_score)) +
+  geom_histogram(binwidth = 0.05, boundary = 0) +
+  xlim(c(0, 1))
 ```
 
 
-The "brute force" approach to allocating samples to batches would simply then select the best layout from these random layouts. This is implemented in the `allocate_samples` function using the `method = "best_random"` argument for demonstration purposes (though note that due to the use of different random seeds, this layout may differ from that generated above). Here, we generate 1000 random layouts and then select the one with the best balance of the covariates.
+The "brute force" approach of allocating samples to batches would simply then select the best layout from these random layouts. This is implemented in the `allocate_samples` function using the `method = "best_random"` argument for demonstration purposes (though note that due to the use of different random seeds, this layout may differ from that we have generated above). Here, we generate 1000 random layouts and then select the one with the best balance of the covariates.
 ```{r}
 best_random_layout = allocate_samples(toy_data, 
                                  batch_size = 13, 
@@ -123,39 +126,18 @@ best_random_layout = allocate_samples(toy_data,
                                  iterations = 1000,
                                  method = "best_random")
 
-head(best_random_layout)
+head(best_random_layout$layout)
 ```
 
 
-Again, the balance of the layout across all of our specified covariates is assessed calculating the joint probability that all of them do not differ between the batches. We can see that the best random layout is clearly a superior layout to the common practice of performing a single randomisation as we did above.
+We can see that the best random layout is clearly a superior layout to the common practice of performing a single randomisation as we did above. On the other side of the coin, there are still many possible layouts that have superior balance.
 ```{r}
-prod(best_random_layout[['results']]$p_value)
+calculate_balance_score(best_random_layout[['results']]$p_value)
 ```
 
 
 ## Optimisation methods from machine learning
-Even with the processing capabilities of modern desktop computers, brute force approaches are problematic since the number of possible combinations quickly explodes. 
-
-<!-- If we take our example of 98 samples and a batch size of 13, we can calculate the total number of possible allocations using the binomial coefficient as follows: -->
-<!-- ```{r} -->
-<!-- n_samples <- 98 -->
-<!-- batch_size <- 13 -->
-<!-- n_batches <- ceiling(n_samples / batch_size) -->
-
-<!-- # Calculate the total number of possible allocations -->
-<!-- n_possible_allocations <- 1 -->
-<!-- for (batch in 1:n_batches) { -->
-<!--   remaining_samples <- n_samples - (batch - 1) * batch_size -->
-<!--   # For the last batch, adjust the batch size if fewer samples remain -->
-<!--   current_batch_size <- min(batch_size, remaining_samples) -->
-<!--   n_possible_allocations <- n_possible_allocations * choose(remaining_samples, current_batch_size) -->
-<!-- } -->
-
-<!-- n_possible_allocations -->
-<!-- ``` -->
-<!-- ??Factorial dependence on both the number of samples and the batch size, and exponential dependence on the number of batches. The number of possible allocations quickly exceeds not only the estimated number of atoms in the universe, but also the maximum value we can store in double precision floating point (with a batch size of 13, only 240 samples). -->
-
-Since exhaustive search is clearly impractical, we therefore we exploit machine learning optimisation approaches in order to maximise the balance of the batches that are generated. Specifically we utilise a simulated annealing algorithm, which is a heuristic optimisation method that can efficiently approximate the global optimum of a large search space. Interested readers are directed towards the general introduction from wikipedia [wikipedia_2023a], but in practice the method is implemented as the default method using to allocate samples to different batches (but can be explicitly specified using the argument `method = "simulated_annealing"`). 
+Even with the processing capabilities of modern desktop computers, brute force approaches such as applied above are problematic since the number of possible combinations quickly explodes. Since exhaustive search is therefore impractical, we exploit machine learning optimisation approaches in order to maximise the balance of the batches that are generated. Specifically we utilise a simulated annealing algorithm, which is a heuristic optimisation method that can efficiently approximate the global optimum of a large search space. Interested readers are directed towards the general introduction from wikipedia [wikipedia_2023a]. Practically, we implement the method here as the default method using to allocate samples to different batches (but can be explicitly specified using the argument `method = "simulated_annealing"`). 
 ```{r}
 optimal_layout = allocate_samples(toy_data, 
                                  batch_size = 13, 
@@ -163,11 +145,11 @@ optimal_layout = allocate_samples(toy_data,
                                  iterations = 300,
                                  plot_convergence = TRUE)
 ```
-For clarity, we return a plot to make it easy for the user to confirm that the simulated annealing algorithm has been run with a sufficient number of iterations to converge, seen by the ???saturation of the joint probability.
+For clarity, we return a plot to make it easy for the user to confirm that the simulated annealing algorithm has been run with a sufficient number of iterations to converge, seen by the saturation of the balance score.
 
-Accordingly, we also achieve a more balanced configuration than that of the best random layout and within a samller number of iterations.
+Accordingly, we also achieve a more balanced configuration than that of the best random layout.
 ```{r}
-prod(optimal_layout[['results']]$p_value)
+calculate_balance_score(optimal_layout[['results']]$p_value)
 ```
 
 
@@ -187,7 +169,7 @@ runtime_optimal <- system.time({
   optimal_layout <- allocate_samples(toy_data, 
                                      batch_size = 13, 
                                      covariates = c("covariate1", "covariate2", "covariate3"),
-                                     #plot_convergence = FALSE,
+                                     method = "simulated_annealing",
                                      iterations = 300)
 })
 
@@ -197,25 +179,45 @@ data.frame(method = c("brute_force", "simulated_annealing"),
   ggplot(aes(x = method, y = time, fill = method)) +
   geom_col()
 ```
-In addition to generating a more balanced layout, we see that the machine learning approach also achieves this in less run time.
+In addition to generating a more balanced layout, we see that the machine learning approach also achieves this with fewer iterations and in less run time.
+
 
 ## Blocking
-There is a adage on the design of experiments, commonly attributed to George Box, to "block what you can, randomise what you cannot". We have discussed the limitations of randomisation in situations where the covariates for all samples are already known in advance. However, the advice to block variables is still relevant, and we also implement functionality to block samples within batches by a specified variable. This can be performed as follows:
+There is a adage on the design of experiments, commonly attributed to George Box, to "block what you can, randomise what you cannot". We have discussed the limitations of randomisation in situations where the covariates for all samples are already known in advance. However, the advice to block variables is still pertinent in our situation, as blocking will completely remove the impact of the technical batch effect upon a blocked predictor variable rather than only mitigate against it. We also implement functionality to block samples within batches by a specified variable as follows:
 ```{r}
 optimal_layout_blocked = allocate_samples(toy_data, 
                                  batch_size = 13, 
                                  covariates = c("covariate1", "covariate2", "covariate3"),
                                  blocking_variable = "block_id",
-                                 iterations = 1000,
+                                 iterations = 300,
                                  method = "simulated_annealing")
 ```
 
 
 ## plot an overview of the layout
-In order to easily get an overview of the balance of a particular layout, we provide a simple function to plot the levels of covariates across the batches.
+In order to easily get an overview of the balance of a particular layout (a useful sanity check!), we provide a simple function to plot the levels of covariates across the batches.
 ```{r}
 plot_layout(optimal_layout_blocked, covariates = c("covariate1", "covariate2", "covariate3"))
 ```
+
+```{r}
+table(optimal_layout_blocked$layout$batch_allocation)
+
+
+tmp = allocate_single_random(data = toy_data, 
+                       batch_size = 13, 
+                       blocking_variable = "block_id")
+
+table(tmp$layout$batch_allocation)
+
+tmp2 = allocate_best_random(data = toy_data, 
+                       batch_size = 13, 
+                       blocking_variable = "block_id",
+                       iterations = 100)
+
+table(tmp2$layout$batch_allocation)
+```
+
 
 
 # session info
