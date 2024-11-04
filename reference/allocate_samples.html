@@ -53,7 +53,8 @@
 <span>  cooling_rate <span class="op">=</span> <span class="fl">0.975</span>,</span>
 <span>  seed <span class="op">=</span> <span class="fl">123</span>,</span>
 <span>  plot_convergence <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  collapse_rare_factors <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  collapse_rare_factors <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  balance_metric <span class="op">=</span> <span class="st">"harmonic_mean"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -108,6 +109,10 @@
 <dt id="arg-collapse-rare-factors">collapse_rare_factors<a class="anchor" aria-label="anchor" href="#arg-collapse-rare-factors"></a></dt>
 <dd><p>= FALSE A logical indicating whether to collapse rare factor levels in the covariates. The default is <code>FALSE</code>. Factor levels that are present with counts either less than 5 or in 0.05*batch_size are collapsed into a single level "other".
 Please note that the layout returned will contain these collapsed factor levels, rather than your original input data.</p></dd>
+
+
+<dt id="arg-balance-metric">balance_metric<a class="anchor" aria-label="anchor" href="#arg-balance-metric"></a></dt>
+<dd><p>A character string specifying the metric to use for calculating the balance score. Valid options are "harmonic_mean" (default) and "peoduct".</p></dd>
 
 </dl></div>
     <div class="section level2">
