@@ -107,6 +107,7 @@ test_covariates = function(layout, blocking_variable = "block_id"){
   continuous_vars <- continuous_vars[!continuous_vars %in% c("batch_allocation", blocking_variable)]
 
   test_results_continuous <- layout %>%
+    dplyr::filter(!grepl("padding", sample_id)) %>%
     dplyr::mutate(batch = batch_allocation) %>%
     dplyr::select(-sample_id) %>%
     tidyr::pivot_longer(cols = all_of(continuous_vars), names_to = "covariate", values_to = "value") %>%
@@ -118,6 +119,7 @@ test_covariates = function(layout, blocking_variable = "block_id"){
   factor_vars <- factor_vars[!factor_vars %in% c("batch_allocation", blocking_variable)]
 
   test_results_factor <- layout %>%
+    dplyr::filter(!grepl("padding", sample_id)) %>%
     dplyr::mutate(batch = batch_allocation) %>%
     dplyr::select(-sample_id) %>%
     tidyr::pivot_longer(cols = all_of(factor_vars), names_to = "covariate", values_to = "value") %>%
@@ -764,6 +766,7 @@ plot_layout <- function(output, id_column = "sample_id", covariates) {
 
   # continuous covariates
   continuous_plot = layout %>%
+    dplyr::filter(!grepl("padding", sample_id)) %>%
     dplyr::select(where(is.numeric) | {{id_column}}, batch_allocation) %>%
     tidyr::pivot_longer(cols = !c({{id_column}}, batch_allocation), names_to = "covariate", values_to = "value") %>%
     ggplot2::ggplot(ggplot2::aes(x = batch_allocation, y = value)) +
@@ -774,6 +777,7 @@ plot_layout <- function(output, id_column = "sample_id", covariates) {
 
 # categorical covariates
   categorical_plot = layout %>%
+    dplyr::filter(!grepl("padding", sample_id)) %>%
     dplyr::select(where(is.factor) | {{id_column}}, batch_allocation) %>%
     tidyr::pivot_longer(cols = !c(id_column, batch_allocation), names_to = "covariate", values_to = "value") %>%
     droplevels() %>%
