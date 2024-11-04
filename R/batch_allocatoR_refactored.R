@@ -768,7 +768,7 @@ plot_layout <- function(output, id_column = "sample_id", covariates) {
     tidyr::pivot_longer(cols = !c({{id_column}}, batch_allocation), names_to = "covariate", values_to = "value") %>%
     ggplot2::ggplot(ggplot2::aes(x = batch_allocation, y = value)) +
       ggplot2::geom_point() +
-      ggplot2::facet_wrap(~ covariate)
+      ggplot2::facet_wrap(~ covariate, scales = "free_y")
 
   print(continuous_plot)
 
@@ -781,7 +781,7 @@ plot_layout <- function(output, id_column = "sample_id", covariates) {
     dplyr::summarise(n = n()) %>%
     ggplot2::ggplot(aes(x = batch_allocation, y = n, fill = value)) +
       geom_col()  +
-      facet_wrap(~ covariate)
+      facet_wrap(~ covariate, scales = "free_y")
 
   print(categorical_plot)
 }
