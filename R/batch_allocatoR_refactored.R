@@ -218,13 +218,14 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
 ## ---------------------------------------------------------------------------------------------------------------------------------
 #' Calculate Balance Score
 #'
-#' This function calculates a covariate balance score by calculating the harmonic mean of the p-values from individual covariate balance tests.
+#' This function calculates a covariate balance score by calculating (by default) the harmonic mean of the p-values from individual covariate balance tests.
 #' This does not require the assumptions that the covariates are independent.
 #'
 #' @param p_values A numeric vector containing p-values from individual covariate balance tests.
 #'   All values must be between 0 and 1.
 #' @param na.rm Logical; if TRUE (default), NA values are removed before calculation.
 #'   If FALSE and NA values are present, the function will return NA.
+#' @param balance_metric A character string specifying the metric to use for calculating the balance score. Valid options are "harmonic_mean" (default) and "peoduct".
 #'
 #' @return A numeric value representing the overall balance score.
 #'   Higher values indicate better covariate balance.
@@ -245,7 +246,7 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
 #'
 #' @export
 
-calculate_balance_score = function(p_values, na.rm = TRUE){
+calculate_balance_score = function(p_values, na.rm = TRUE, balance_metric = "harmonic_mean"){
   # remove NA values if present
   if(na.rm){
     p_values = p_values[!is.na(p_values)]
@@ -255,13 +256,23 @@ calculate_balance_score = function(p_values, na.rm = TRUE){
   }
 
   # harmonic mean
-  harmonic_mean = 1 / mean(1/p_values)
+  if(balance_metric == "harmonic_mean"){
+    harmonic_mean = 1 / mean(1/p_values)
 
-  return(harmonic_mean)
+    return(harmonic_mean)
+  }
+  # product
+  else if(balance_metric == "product"){
+    product = prod(p_values)
+    return(product)
+    }
+  else{
+    stop("Invalid balance metric specified. Supported metrics: 'harmonic_mean', 'product'")
+  }
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------------------
-allocate_best_random <- function(data, batch_size, iterations, blocking_variable = NA) {
+allocate_best_random <- function(data, batch_size, iterations, blocking_variable = NA, balance_metric = balance_metric) {
 
   # Allocate the number of layouts specified by "iterations"
   many_layouts <- replicate(iterations,
@@ -271,7 +282,7 @@ allocate_best_random <- function(data, batch_size, iterations, blocking_variable
                             simplify = FALSE)
 
   # calculate balance score for each layout
-  balance_scores <- sapply(many_layouts, function(x) calculate_balance_score(x$results$p_value))
+  balance_scores <- sapply(many_layouts, function(x) calculate_balance_score(x$results$p_value, balance_metric = balance_metric))
 
   # Return the layout with the highest balance score
   index_of_best = which.max(balance_scores)
@@ -280,7 +291,7 @@ allocate_best_random <- function(data, batch_size, iterations, blocking_variable
 
   best_layout_result <- many_layouts[[index_of_best]]$results
 
-  cat("Balance Score:", calculate_balance_score(best_layout_result$p_value), "\n")
+  cat("Balance Score:", calculate_balance_score(best_layout_result$p_value, balance_metric = balance_metric), "\n")
 
   # Return the layout
   return(list(layout = best_layout,
@@ -290,17 +301,18 @@ allocate_best_random <- function(data, batch_size, iterations, blocking_variable
 ## ---------------------------------------------------------------------------------------------------------------------------------
 # Function for simulated annealing allocation
 simulate_annealing <- function(data,
-                                covariates,
-                                blocking_variable = NA,
-                                batch_size,
-                                temperature,
-                                cooling_rate,
-                                iterations,
-                                plot = TRUE) {
+                               covariates,
+                               blocking_variable = NA,
+                               batch_size,
+                               temperature,
+                               cooling_rate,
+                               iterations,
+                               plot = TRUE,
+                               balance_metric = balance_metric) {
   # Step 1: Define the objective function to minimize the sum of p-values
   objective <- function(layout_inc_data, blocking_variable = blocking_variable) {
     metrics <- test_covariates(layout_inc_data, blocking_variable = blocking_variable)
-    balance_score <- calculate_balance_score(metrics$p_value)
+    balance_score <- calculate_balance_score(metrics$p_value, balance_metric = balance_metric)
     return(balance_score)
   }
 
@@ -485,6 +497,7 @@ simulate_annealing <- function(data,
 #' @param plot_convergence = TRUE A logical indicating whether to plot the convergence of the optimisation process, only relevant if the method specified is "simulated_annealing". The default is `TRUE`.
 #' @param collapse_rare_factors = FALSE A logical indicating whether to collapse rare factor levels in the covariates. The default is `FALSE`. Factor levels that are present with counts either less than 5 or in 0.05*batch_size are collapsed into a single level "other".
 #'  Please note that the layout returned will contain these collapsed factor levels, rather than your original input data.
+#' @param balance_metric A character string specifying the metric to use for calculating the balance score. Valid options are "harmonic_mean" (default) and "peoduct".
 #'
 #' @return An object containing the allocation layout of samples to batches, along with any specified blocking and covariate adjustments. The exact structure of the return value depends on the allocation method used.
 #'
@@ -517,7 +530,8 @@ allocate_samples <- function(data,
                              cooling_rate = 0.975,
                              seed = 123,
                              plot_convergence = TRUE,
-                             collapse_rare_factors = FALSE) {
+                             collapse_rare_factors = FALSE,
+                             balance_metric = "harmonic_mean") {
 
   # Valid input
   if (!is.data.frame(data)) {
@@ -655,11 +669,23 @@ allocate_samples <- function(data,
   # run specified method
   set.seed(seed)
   if (method == "random") {
-    output = allocate_single_random(data = data, batch_size = batch_size, blocking_variable = blocking_variable)
+    output = allocate_single_random(data = data,
+                                    batch_size = batch_size,
+                                    blocking_variable = blocking_variable)
   } else if (method == "best_random") {
-    output = allocate_best_random(data = data, batch_size = batch_size, blocking_variable = blocking_variable, iterations = iterations)
+    output = allocate_best_random(data = data, batch_size = batch_size,
+                                  blocking_variable = blocking_variable,
+                                  iterations = iterations,
+                                  balance_metric = balance_metric)
   } else if (method == "simulated_annealing") {
-    output = simulate_annealing(data = data, batch_size = batch_size, blocking_variable = blocking_variable, temperature = temperature, cooling_rate = cooling_rate, iterations = iterations, plot = plot_convergence)
+    output = simulate_annealing(data = data,
+                                batch_size = batch_size,
+                                blocking_variable = blocking_variable,
+                                temperature = temperature,
+                                cooling_rate = cooling_rate,
+                                iterations = iterations,
+                                plot = plot_convergence,
+                                balance_metric = balance_metric)
   } else {
     stop("Invalid method specified")
   }

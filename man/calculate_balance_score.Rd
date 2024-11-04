@@ -2,9 +2,13 @@
 % Please edit documentation in R/batch_allocatoR_refactored.R
 \name{calculate_balance_score}
 \alias{calculate_balance_score}
-\title{Calculate Balance Score Using Fisher's method for combining p-values}
+\title{Calculate Balance Score}
 \usage{
-calculate_balance_score(p_values, na.rm = TRUE)
+calculate_balance_score(
+  p_values,
+  na.rm = TRUE,
+  balance_metric = "harmonic_mean"
+)
 }
 \arguments{
 \item{p_values}{A numeric vector containing p-values from individual covariate balance tests.
@@ -12,6 +16,8 @@ All values must be between 0 and 1.}
 
 \item{na.rm}{Logical; if TRUE (default), NA values are removed before calculation.
 If FALSE and NA values are present, the function will return NA.}
+
+\item{balance_metric}{A character string specifying the metric to use for calculating the balance score. Valid options are "harmonic_mean" (default) and "peoduct".}
 }
 \value{
 A numeric value representing the overall balance score.
