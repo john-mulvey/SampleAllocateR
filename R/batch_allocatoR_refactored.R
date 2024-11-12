@@ -102,51 +102,49 @@ pad_samples <- function(data, batch_size) {
 
 ## ---------------------------------------------------------------------------------------------------------------------------------
 test_covariates = function(layout, blocking_variable = "block_id"){
+  test_results <- data.frame(covariate = character(), p_value = numeric())
+
   # test for differences in continuous covariates between batches
   continuous_vars <- names(layout)[sapply(layout, is.numeric)]
   continuous_vars <- continuous_vars[!continuous_vars %in% c("batch_allocation", blocking_variable)]
 
-  test_results_continuous <- layout %>%
-    dplyr::filter(!grepl("padding", sample_id)) %>%
-    dplyr::mutate(batch = batch_allocation) %>%
-    dplyr::select(-sample_id) %>%
-    tidyr::pivot_longer(cols = all_of(continuous_vars), names_to = "covariate", values_to = "value") %>%
-    dplyr::group_by(covariate) %>%
-    dplyr::summarise(p_value =  kruskal.test(value ~ batch)$p.value)
+  if(length(continuous_vars) > 0) {
+    test_results_continuous <- layout %>%
+      dplyr::filter(!grepl("padding", sample_id)) %>%
+      dplyr::mutate(batch = batch_allocation) %>%
+      dplyr::select(-sample_id) %>%
+      tidyr::pivot_longer(cols = any_of(continuous_vars), names_to = "covariate", values_to = "value") %>%
+      dplyr::group_by(covariate) %>%
+      dplyr::summarise(p_value = kruskal.test(value ~ batch)$p.value)
+
+    test_results <- dplyr::bind_rows(test_results, test_results_continuous)
+  }
 
   # test for differences in categorical covariates between batches
   factor_vars <- names(layout)[sapply(layout, is.factor)]
   factor_vars <- factor_vars[!factor_vars %in% c("batch_allocation", blocking_variable)]
 
-  test_results_factor <- layout %>%
-    dplyr::filter(!grepl("padding", sample_id)) %>%
-    dplyr::mutate(batch = batch_allocation) %>%
-    dplyr::select(-sample_id) %>%
-    tidyr::pivot_longer(cols = all_of(factor_vars), names_to = "covariate", values_to = "value") %>%
-    dplyr::group_by(covariate) %>%
-    dplyr::summarise(p_value = {
-      contingency_table <- table(droplevels(value), batch)
-      if (sum(rowSums(contingency_table) == 0) > 0) {
-        NA
-      } else {
-        stats::fisher.test(contingency_table, simulate.p.value = TRUE)$p.value
-      }
-    })
+  if(length(factor_vars) > 0) {
+    test_results_factor <- layout %>%
+      dplyr::filter(!grepl("padding", sample_id)) %>%
+      dplyr::mutate(batch = batch_allocation) %>%
+      dplyr::select(-sample_id) %>%
+      tidyr::pivot_longer(cols = any_of(factor_vars), names_to = "covariate", values_to = "value") %>%
+      dplyr::group_by(covariate) %>%
+      dplyr::summarise(p_value = {
+        contingency_table <- table(droplevels(value), batch)
+        if (sum(rowSums(contingency_table) == 0) > 0) {
+          NA
+        } else {
+          stats::fisher.test(contingency_table, simulate.p.value = TRUE)$p.value
+        }
+      })
 
-  # Combine the results for continuous and factor variables and reformat
-  test_results <- dplyr::bind_rows(test_results_continuous, test_results_factor)
-
-  # Combine the results for continuous and factor variables and reformat
-  test_results <- dplyr::bind_rows(test_results_continuous, test_results_factor)
-
-  result_table <- test_results %>%
-    tidyr::pivot_wider(names_from = covariate, values_from = p_value)
+    test_results <- dplyr::bind_rows(test_results, test_results_factor)
+  }
 
   return(test_results)
-
 }
-
-
 ## ---------------------------------------------------------------------------------------------------------------------------------
 allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
 
@@ -764,30 +762,35 @@ plot_layout <- function(output, id_column = "sample_id", covariates) {
   layout = layout %>%
     dplyr::select({{id_column}}, batch_allocation, all_of(covariates))
 
+  continuous_vars <- layout %>% dplyr::select(where(is.numeric)) %>% names()
+  categorical_vars <- layout %>% dplyr::select(where(is.factor)) %>% names()
+
   # continuous covariates
-  continuous_plot = layout %>%
-    dplyr::filter(!grepl("padding", sample_id)) %>%
-    dplyr::select(where(is.numeric) | {{id_column}}, batch_allocation) %>%
-    tidyr::pivot_longer(cols = !c({{id_column}}, batch_allocation), names_to = "covariate", values_to = "value") %>%
-    ggplot2::ggplot(ggplot2::aes(x = batch_allocation, y = value)) +
+  if(length(continuous_vars) > 0) {
+    continuous_plot = layout %>%
+      dplyr::filter(!grepl("padding", sample_id)) %>%
+      dplyr::select(where(is.numeric) | {{id_column}}, batch_allocation) %>%
+      tidyr::pivot_longer(cols = !c({{id_column}}, batch_allocation), names_to = "covariate", values_to = "value") %>%
+      ggplot2::ggplot(ggplot2::aes(x = batch_allocation, y = value)) +
       ggplot2::geom_point() +
       ggplot2::facet_wrap(~ covariate, scales = "free_y")
+    print(continuous_plot)
+  }
 
-  print(continuous_plot)
-
-# categorical covariates
-  categorical_plot = layout %>%
-    dplyr::filter(!grepl("padding", sample_id)) %>%
-    dplyr::select(where(is.factor) | {{id_column}}, batch_allocation) %>%
-    tidyr::pivot_longer(cols = !c(id_column, batch_allocation), names_to = "covariate", values_to = "value") %>%
-    droplevels() %>%
-    dplyr::group_by(covariate, value, batch_allocation) %>%
-    dplyr::summarise(n = n()) %>%
-    ggplot2::ggplot(aes(x = batch_allocation, y = n, fill = value)) +
+  # categorical covariates
+  if(length(categorical_vars) > 0) {
+    categorical_plot = layout %>%
+      dplyr::filter(!grepl("padding", sample_id)) %>%
+      dplyr::select(where(is.factor) | {{id_column}}, batch_allocation) %>%
+      tidyr::pivot_longer(cols = !c({{id_column}}, batch_allocation), names_to = "covariate", values_to = "value") %>%
+      droplevels() %>%
+      dplyr::group_by(covariate, value, batch_allocation) %>%
+      dplyr::summarise(n = n()) %>%
+      ggplot2::ggplot(aes(x = batch_allocation, y = n, fill = value)) +
       geom_col()  +
       facet_wrap(~ covariate, scales = "free_y")
-
-  print(categorical_plot)
+    print(categorical_plot)
+  }
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------------------
