@@ -772,7 +772,7 @@ plot_layout <- function(output, id_column = "sample_id", covariates) {
       dplyr::select(where(is.numeric) | {{id_column}}, batch_allocation) %>%
       tidyr::pivot_longer(cols = !c({{id_column}}, batch_allocation), names_to = "covariate", values_to = "value") %>%
       ggplot2::ggplot(ggplot2::aes(x = batch_allocation, y = value)) +
-      ggplot2::geom_point() +
+      ggplot2::geom_jitter() +
       ggplot2::facet_wrap(~ covariate, scales = "free_y")
     print(continuous_plot)
   }
