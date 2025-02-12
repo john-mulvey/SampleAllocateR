@@ -46,7 +46,7 @@ allocate_samples(
 \item{collapse_rare_factors}{= FALSE A logical indicating whether to collapse rare factor levels in the covariates. The default is \code{FALSE}. Factor levels that are present with counts either less than 5 or in 0.05*batch_size are collapsed into a single level "other".
 Please note that the layout returned will contain these collapsed factor levels, rather than your original input data.}
 
-\item{balance_metric}{A character string specifying the metric to use for calculating the balance score. Valid options are "harmonic_mean" (default) and "peoduct".}
+\item{balance_metric}{A character string specifying the metric to use for calculating the balance score. Valid options are "harmonic_mean" (default) and "product".}
 }
 \value{
 An object containing the allocation layout of samples to batches, along with any specified blocking and covariate adjustments. The exact structure of the return value depends on the allocation method used.

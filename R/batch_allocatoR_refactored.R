@@ -225,7 +225,7 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
 #'   All values must be between 0 and 1.
 #' @param na.rm Logical; if TRUE (default), NA values are removed before calculation.
 #'   If FALSE and NA values are present, the function will return NA.
-#' @param balance_metric A character string specifying the metric to use for calculating the balance score. Valid options are "harmonic_mean" (default) and "peoduct".
+#' @param balance_metric A character string specifying the metric to use for calculating the balance score. Valid options are "harmonic_mean" (default) and "product".
 #'
 #' @return A numeric value representing the overall balance score.
 #'   Higher values indicate better covariate balance.
@@ -497,7 +497,7 @@ simulate_annealing <- function(data,
 #' @param plot_convergence = TRUE A logical indicating whether to plot the convergence of the optimisation process, only relevant if the method specified is "simulated_annealing". The default is `TRUE`.
 #' @param collapse_rare_factors = FALSE A logical indicating whether to collapse rare factor levels in the covariates. The default is `FALSE`. Factor levels that are present with counts either less than 5 or in 0.05*batch_size are collapsed into a single level "other".
 #'  Please note that the layout returned will contain these collapsed factor levels, rather than your original input data.
-#' @param balance_metric A character string specifying the metric to use for calculating the balance score. Valid options are "harmonic_mean" (default) and "peoduct".
+#' @param balance_metric A character string specifying the metric to use for calculating the balance score. Valid options are "harmonic_mean" (default) and "product".
 #'
 #' @return An object containing the allocation layout of samples to batches, along with any specified blocking and covariate adjustments. The exact structure of the return value depends on the allocation method used.
 #'

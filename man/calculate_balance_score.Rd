@@ -17,14 +17,14 @@ All values must be between 0 and 1.}
 \item{na.rm}{Logical; if TRUE (default), NA values are removed before calculation.
 If FALSE and NA values are present, the function will return NA.}
 
-\item{balance_metric}{A character string specifying the metric to use for calculating the balance score. Valid options are "harmonic_mean" (default) and "peoduct".}
+\item{balance_metric}{A character string specifying the metric to use for calculating the balance score. Valid options are "harmonic_mean" (default) and "product".}
 }
 \value{
 A numeric value representing the overall balance score.
 Higher values indicate better covariate balance.
 }
 \description{
-This function calculates a covariate balance score by calculating the harmonic mean of the p-values from individual covariate balance tests.
+This function calculates a covariate balance score by calculating (by default) the harmonic mean of the p-values from individual covariate balance tests.
 This does not require the assumptions that the covariates are independent.
 }
 \examples{
