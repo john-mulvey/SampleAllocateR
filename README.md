@@ -1,5 +1,6 @@
 <!-- badges: start -->
 [![R-CMD-check.yaml](https://github.com/john-mulvey/SampleAllocateR/actions/workflows/check-standard.yaml/badge.svg)](https://github.com/john-mulvey/SampleAllocateR/actions/workflows/check-standard.yaml)
+[![DOI](https://zenodo.org/badge/862976979.svg)](https://zenodo.org/badge/latestdoi/862976979)
 <!-- badges: end -->
 
 This is a pre-release version of the SampleAllocateR package: designed to optimally allocate samples with known covariates to experimental batches.
