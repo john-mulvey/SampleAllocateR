@@ -3,7 +3,9 @@
 [![DOI](https://zenodo.org/badge/862976979.svg)](https://zenodo.org/badge/latestdoi/862976979)
 <!-- badges: end -->
 
-This is a pre-release version of the SampleAllocateR package: designed to optimally allocate samples with known covariates to experimental batches.
+This repository contains the **SampleAllocateR** package: a tool designed to optimally allocate samples with known covariates to experimental batches. 
+
+For more information about the method, please see our [preprint on bioRxiv](https://doi.org/10.1101/2025.03.21.644523).
 
 # Installation
 To install the latest version:
@@ -14,7 +16,7 @@ install.packages("remotes")
 # install package from github
 remotes::install_github("https://github.com/john-mulvey/SampleAllocateR", build_vignettes = TRUE)
 ```
-Note that building vignettes is currently very slow, but that it is not possible to supply them pre-built when installing the pacakge from github. If you would rather not wait, the vignette can be viewed [on the package website](https://john-mulvey.github.io/SampleAllocateR/)
+Note that building vignettes is currently slow, but that it is not possible to supply them pre-built when installing the pacakge from github. If you would rather not wait, the vignette can be viewed [on the package website](https://john-mulvey.github.io/SampleAllocateR/)
 
 # Quick Start Guide
 In order to generate a layout with the optimal balance of covariates between experimental batches:
