@@ -708,7 +708,12 @@ allocate_samples <- function(data,
 #' @param id_column The name of the column in the layout data frame that contains the sample IDs. The default value is "sample_id".
 #' @param covariates A character vector of covariate names to be visualized. The default value is `NULL`, which will visualize all covariates in the layout data frame.
 #'
-#' @return The function does not return an object; instead, it directly prints two plots to the R graphics device. The first plot visualizes the distribution of continuous covariates across batches, using a scatter plot for each covariate. The second plot shows the distribution of categorical covariates using a bar plot for each covariate level across batches.
+#' @return A named list containing ggplot2 objects. The list may contain up to two elements:
+#' \itemize{
+#'   \item \code{continuous}: A ggplot2 object showing the distribution of continuous covariates across batches using scatter plots, with each covariate displayed in a separate facet.
+#'   \item \code{categorical}: A ggplot2 object showing the distribution of categorical covariates across batches using bar plots, with each covariate displayed in a separate facet and different factor levels shown as different colors.
+#' }
+#' The returned list will only contain elements for covariate types that are present in the data. If no continuous covariates are found, the \code{continuous} element will be absent from the list, and similarly for categorical covariates.
 #'
 #' @details
 #' The function first processes the layout to separate continuous and categorical covariates. For continuous covariates, it creates a scatter plot showing the value of each covariate by batch. For categorical covariates, it aggregates the data to count the number of samples in each category by batch and then creates a bar plot. Both plots are faceted by covariate to provide a clear and comparative view of the distribution across batches.
@@ -722,7 +727,15 @@ allocate_samples <- function(data,
 #'                                    covariates = c("covariate1", "covariate2", "covariate3"),
 #'                                    batch_size = 13)
 #'
-#' plot_layout(allocated_data, covariates = c("covariate1", "covariate2", "covariate3"))
+#' plots <- plot_layout(allocated_data, covariates = c("covariate1", "covariate2", "covariate3"))
+#'
+#' # View individual plots
+#' plots$continuous    # Show continuous covariates plot
+#' plots$categorical   # Show categorical covariates plot
+#'
+#' # Save plots
+#' # ggsave("continuous_covariates.png", plots$continuous)
+#' # ggsave("categorical_covariates.png", plots$categorical)
 #'
 #' @import ggplot2
 #' @import dplyr
@@ -765,6 +778,9 @@ plot_layout <- function(output, id_column = "sample_id", covariates) {
   continuous_vars <- layout %>% dplyr::select(where(is.numeric)) %>% names()
   categorical_vars <- layout %>% dplyr::select(where(is.factor)) %>% names()
 
+  # Initialize list to store plots
+  plots <- list()
+
   # continuous covariates
   if(length(continuous_vars) > 0) {
     continuous_plot = layout %>%
@@ -773,8 +789,10 @@ plot_layout <- function(output, id_column = "sample_id", covariates) {
       tidyr::pivot_longer(cols = !c({{id_column}}, batch_allocation), names_to = "covariate", values_to = "value") %>%
       ggplot2::ggplot(ggplot2::aes(x = batch_allocation, y = value)) +
       ggplot2::geom_jitter() +
-      ggplot2::facet_wrap(~ covariate, scales = "free_y")
-    print(continuous_plot)
+      ggplot2::facet_wrap(~ covariate, scales = "free_y") +
+      ggplot2::labs(title = "Continuous Covariates Distribution Across Batches")
+
+    plots[["continuous"]] <- continuous_plot
   }
 
   # categorical covariates
@@ -785,12 +803,17 @@ plot_layout <- function(output, id_column = "sample_id", covariates) {
       tidyr::pivot_longer(cols = !c({{id_column}}, batch_allocation), names_to = "covariate", values_to = "value") %>%
       droplevels() %>%
       dplyr::group_by(covariate, value, batch_allocation) %>%
-      dplyr::summarise(n = n()) %>%
+      dplyr::summarise(n = n(), .groups = "drop") %>%
       ggplot2::ggplot(aes(x = batch_allocation, y = n, fill = value)) +
-      geom_col()  +
-      facet_wrap(~ covariate, scales = "free_y")
-    print(categorical_plot)
+      ggplot2::geom_col()  +
+      ggplot2::facet_wrap(~ covariate, scales = "free_y") +
+      ggplot2::labs(title = "Categorical Covariates Distribution Across Batches")
+
+    plots[["categorical"]] <- categorical_plot
   }
+
+  # Return the list of plots
+  return(plots)
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------------------
