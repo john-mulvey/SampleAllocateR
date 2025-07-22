@@ -7,6 +7,8 @@ This repository contains the **SampleAllocateR** package: a tool designed to opt
 
 For more information about the method, please see our [preprint on bioRxiv](https://doi.org/10.1101/2025.03.21.644523).
 
+A basic [shiny application](https://m8abun-john-mulvey.shinyapps.io/sample_allocation/) is available, although for best results please run locally.
+
 # Installation
 To install the latest version:
 ```r
