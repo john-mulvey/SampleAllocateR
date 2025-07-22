@@ -742,7 +742,7 @@ allocate_samples <- function(data,
 #' @import tidyr
 #' @export
 
-plot_layout <- function(output, id_column = "sample_id", covariates) {
+plot_layout <- function(output, id_column = "sample_id", covariates = NULL) {
   # validate input
   if (!is.list(output) || !("layout" %in% names(output))) {
     stop("output must be a list containing a 'layout' element")
@@ -765,7 +765,7 @@ plot_layout <- function(output, id_column = "sample_id", covariates) {
   # function body
   layout = output$layout
 
-  if (missing(covariates) || any(is.na(covariates)) || any(covariates == "")) {
+  if (is.null(covariates)) {
     covariates = names(layout)[!names(layout) %in% c(id_column, "batch_allocation")]
   }
   else {
