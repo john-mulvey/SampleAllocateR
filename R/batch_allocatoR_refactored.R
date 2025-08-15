@@ -29,9 +29,11 @@ utils::globalVariables(c(
 #' @examples
 #' # Generate data with one sample per subject
 #' simulate_data(n_samples = 100)
+#' simulate_data(n_samples = 100, block_size = 1)
 #'
 #' # Generate data with multiple samples per subject
 #' simulate_data(n_samples = 102, block_size = 3)
+
 #'
 #' @importFrom stats rnorm runif
 #' @importFrom dplyr slice mutate select
