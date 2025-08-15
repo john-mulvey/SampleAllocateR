@@ -64,7 +64,7 @@ my_data = simulate_data(n_samples = 100)
 allocated_data <- allocate_samples(data = my_data,
                                    id_column = "sample_id",
                                    method = "simulated_annealing",
-                                   covariates = c("covariate1", "covariate2", "covariate3"),
+                                   covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
                                    batch_size = 13)
 
 
