@@ -95,13 +95,20 @@ to batches of 13.</p>
 <code class="sourceCode R"><span><span class="va">toy_data</span> <span class="op">=</span> <span class="fu"><a href="../reference/simulate_data.html">simulate_data</a></span><span class="op">(</span>n_samples <span class="op">=</span> <span class="fl">98</span>, block_size <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">toy_data</span><span class="op">)</span></span>
-<span><span class="co">#&gt;   sample_id covariate1  covariate2 covariate3 block_id</span></span>
-<span><span class="co">#&gt; 1   Sample1  0.2875775 -0.08336907          C  block_1</span></span>
-<span><span class="co">#&gt; 2   Sample2  0.7883051  0.25331851          B  block_1</span></span>
-<span><span class="co">#&gt; 3   Sample3  0.4089769 -0.02854676          B  block_2</span></span>
-<span><span class="co">#&gt; 4   Sample4  0.8830174 -0.04287046          B  block_2</span></span>
-<span><span class="co">#&gt; 5   Sample5  0.9404673  1.36860228          C  block_3</span></span>
-<span><span class="co">#&gt; 6   Sample6  0.0455565 -0.22577099          A  block_3</span></span></code></pre></div>
+<span><span class="co">#&gt;   sample_id age_at_baseline bmi_at_baseline sex sample_timepoint treatment</span></span>
+<span><span class="co">#&gt; 1  sample_1        65.70611        22.86157   M      timepoint_1 treatment</span></span>
+<span><span class="co">#&gt; 2  sample_2        65.70611        22.86157   M      timepoint_2 treatment</span></span>
+<span><span class="co">#&gt; 3  sample_3        53.54606        33.09642   M      timepoint_1 treatment</span></span>
+<span><span class="co">#&gt; 4  sample_4        53.54606        33.09642   M      timepoint_2 treatment</span></span>
+<span><span class="co">#&gt; 5  sample_5        43.34455        29.96901   F      timepoint_1 treatment</span></span>
+<span><span class="co">#&gt; 6  sample_6        43.34455        29.96901   F      timepoint_2 treatment</span></span>
+<span><span class="co">#&gt;   subject_id</span></span>
+<span><span class="co">#&gt; 1  subject_1</span></span>
+<span><span class="co">#&gt; 2  subject_1</span></span>
+<span><span class="co">#&gt; 3  subject_2</span></span>
+<span><span class="co">#&gt; 4  subject_2</span></span>
+<span><span class="co">#&gt; 5  subject_3</span></span>
+<span><span class="co">#&gt; 6  subject_3</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="randomisation">Randomisation<a class="anchor" aria-label="anchor" href="#randomisation"></a>
@@ -123,25 +130,32 @@ samples to a batch size of 13 as follows:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">single_layout</span> <span class="op">=</span> <span class="fu"><a href="../reference/allocate_samples.html">allocate_samples</a></span><span class="op">(</span><span class="va">toy_data</span>,</span>
 <span>                                 batch_size <span class="op">=</span> <span class="fl">13</span>,</span>
-<span>                                 covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"covariate1"</span>, <span class="st">"covariate2"</span>, <span class="st">"covariate3"</span><span class="op">)</span>,</span>
+<span>                                 covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"age_at_baseline"</span>, <span class="st">"bmi_at_baseline"</span>, <span class="st">"sex"</span><span class="op">)</span>,</span>
 <span>                                 method <span class="op">=</span> <span class="st">"random"</span>,</span>
 <span>                                 blocking_variable <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span></span>
 <span><span class="co">#&gt; No blocking variable specified. </span></span>
-<span><span class="co">#&gt; Covariate: covariate1 - continuous</span></span>
-<span><span class="co">#&gt; Covariate: covariate2 - continuous</span></span>
-<span><span class="co">#&gt; Covariate: covariate3 - categorical</span></span>
+<span><span class="co">#&gt; Covariate: age_at_baseline - continuous</span></span>
+<span><span class="co">#&gt; Covariate: bmi_at_baseline - continuous</span></span>
+<span><span class="co">#&gt; Covariate: sex - categorical</span></span>
 <span><span class="co">#&gt; Number of samples: 98</span></span>
-<span><span class="co">#&gt; Joining with `by = join_by(covariate1, covariate2, covariate3,</span></span>
+<span><span class="co">#&gt; Joining with `by = join_by(age_at_baseline, bmi_at_baseline, sex,</span></span>
 <span><span class="co">#&gt; sample_id)`</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">single_layout</span><span class="op">$</span><span class="va">layout</span><span class="op">)</span></span>
-<span><span class="co">#&gt;   covariate1  covariate2 covariate3 sample_id batch_allocation block_id</span></span>
-<span><span class="co">#&gt; 1  0.2875775 -0.08336907          C   Sample1                7  block_1</span></span>
-<span><span class="co">#&gt; 2  0.7883051  0.25331851          B   Sample2                7  block_1</span></span>
-<span><span class="co">#&gt; 3  0.4089769 -0.02854676          B   Sample3                3  block_2</span></span>
-<span><span class="co">#&gt; 4  0.8830174 -0.04287046          B   Sample4                6  block_2</span></span>
-<span><span class="co">#&gt; 5  0.9404673  1.36860228          C   Sample5                3  block_3</span></span>
-<span><span class="co">#&gt; 6  0.0455565 -0.22577099          A   Sample6                2  block_3</span></span></code></pre></div>
+<span><span class="co">#&gt;   age_at_baseline bmi_at_baseline sex sample_id batch_allocation</span></span>
+<span><span class="co">#&gt; 1        65.70611        22.86157   M  sample_1                7</span></span>
+<span><span class="co">#&gt; 2        65.70611        22.86157   M  sample_2                7</span></span>
+<span><span class="co">#&gt; 3        53.54606        33.09642   M  sample_3                3</span></span>
+<span><span class="co">#&gt; 4        53.54606        33.09642   M  sample_4                6</span></span>
+<span><span class="co">#&gt; 5        43.34455        29.96901   F  sample_5                3</span></span>
+<span><span class="co">#&gt; 6        43.34455        29.96901   F  sample_6                2</span></span>
+<span><span class="co">#&gt;   sample_timepoint treatment subject_id</span></span>
+<span><span class="co">#&gt; 1      timepoint_1 treatment  subject_1</span></span>
+<span><span class="co">#&gt; 2      timepoint_2 treatment  subject_1</span></span>
+<span><span class="co">#&gt; 3      timepoint_1 treatment  subject_2</span></span>
+<span><span class="co">#&gt; 4      timepoint_2 treatment  subject_2</span></span>
+<span><span class="co">#&gt; 5      timepoint_1 treatment  subject_3</span></span>
+<span><span class="co">#&gt; 6      timepoint_2 treatment  subject_3</span></span></code></pre></div>
 <p>The function <code>allocate_samples</code> returns a list with the
 layout of samples to batches in the <code>layout</code> slot and the
 probability that a covaraite does not differ between the batches
@@ -158,7 +172,7 @@ sections). This metric is in the range [0, 1], with higher values
 indicating better balance.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/calculate_balance_score.html">calculate_balance_score</a></span><span class="op">(</span><span class="va">single_layout</span><span class="op">[[</span><span class="st">'results'</span><span class="op">]</span><span class="op">]</span><span class="op">$</span><span class="va">p_value</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 0.04197451</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] 0.5169404</span></span></code></pre></div>
 <p>Here we can see that the balance score of our layout is low
 (indicative of imbalance), despite the fact that the layout was
 generated randomly. This is because whilst randomisation ensures no
@@ -178,25 +192,25 @@ random seeds.</p>
 <span><span class="va">results_list</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">random_seeds</span>, <span class="kw">function</span><span class="op">(</span><span class="va">seed</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu"><a href="../reference/allocate_samples.html">allocate_samples</a></span><span class="op">(</span><span class="va">toy_data</span>,</span>
 <span>                   batch_size <span class="op">=</span> <span class="fl">13</span>,</span>
-<span>                   covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"covariate1"</span>, <span class="st">"covariate2"</span>, <span class="st">"covariate3"</span><span class="op">)</span>,</span>
+<span>                   covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"age_at_baseline"</span>, <span class="st">"bmi_at_baseline"</span>, <span class="st">"sex"</span><span class="op">)</span>,</span>
 <span>                   method <span class="op">=</span> <span class="st">"random"</span>,</span>
 <span>                   blocking_variable <span class="op">=</span> <span class="cn">NA</span>,</span>
 <span>                   seed <span class="op">=</span> <span class="va">seed</span><span class="op">)</span></span>
 <span><span class="op">}</span><span class="op">)</span></span>
 <span></span>
-<span><span class="co"># plot histrogram for a single covariate: covariate1</span></span>
-<span><span class="va">probability_covariate1</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">results_list</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
+<span><span class="co"># plot histrogram for a single covariate: age_at_baseline</span></span>
+<span><span class="va">probability_age_at_baseline</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">results_list</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">i</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
 <span>    iteration_number <span class="op">=</span> <span class="va">i</span>,</span>
 <span>    p_value <span class="op">=</span> <span class="va">results_list</span><span class="op">[[</span><span class="va">i</span><span class="op">]</span><span class="op">]</span><span class="op">[[</span><span class="st">'results'</span><span class="op">]</span><span class="op">]</span> <span class="op">%&gt;%</span></span>
-<span>      <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">covariate</span> <span class="op">==</span> <span class="st">"covariate1"</span><span class="op">)</span> <span class="op">%&gt;%</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/stats/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">covariate</span> <span class="op">==</span> <span class="st">"age_at_baseline"</span><span class="op">)</span> <span class="op">%&gt;%</span></span>
 <span>      <span class="fu">pull</span><span class="op">(</span><span class="va">p_value</span><span class="op">)</span></span>
 <span>  <span class="op">)</span></span>
 <span><span class="op">}</span><span class="op">)</span></span>
-<span><span class="va">plot_data_covariate1</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="va">probability_covariate1</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">plot_data_age_at_baseline</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="va">probability_age_at_baseline</span><span class="op">)</span></span></code></pre></div>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="co"># plot histrogram of probability that covariate1 does not differ between the batches</span></span>
-<span><span class="va">plot_data_covariate1</span> <span class="op">%&gt;%</span></span>
+<code class="sourceCode R"><span><span class="co"># plot histrogram of probability that age_at_baseline does not differ between the batches</span></span>
+<span><span class="va">plot_data_age_at_baseline</span> <span class="op">%&gt;%</span></span>
 <span>  <span class="fu">ggplot</span><span class="op">(</span><span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">p_value</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
 <span>  <span class="fu">geom_histogram</span><span class="op">(</span>binwidth <span class="op">=</span> <span class="fl">0.05</span>, boundary <span class="op">=</span> <span class="fl">0</span><span class="op">)</span></span></code></pre></div>
 <p><img src="methods_for_sample_allocation_to_batches_files/figure-html/unnamed-chunk-6-1.png" width="672">
@@ -242,33 +256,40 @@ covariates.</p>
 <div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">best_random_layout</span> <span class="op">=</span> <span class="fu"><a href="../reference/allocate_samples.html">allocate_samples</a></span><span class="op">(</span><span class="va">toy_data</span>, </span>
 <span>                                 batch_size <span class="op">=</span> <span class="fl">13</span>, </span>
-<span>                                 covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"covariate1"</span>, <span class="st">"covariate2"</span>, <span class="st">"covariate3"</span><span class="op">)</span>,</span>
+<span>                                 covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"age_at_baseline"</span>, <span class="st">"bmi_at_baseline"</span>, <span class="st">"sex"</span><span class="op">)</span>,</span>
 <span>                                 iterations <span class="op">=</span> <span class="fl">1000</span>,</span>
 <span>                                 method <span class="op">=</span> <span class="st">"best_random"</span><span class="op">)</span></span>
 <span><span class="co">#&gt; No blocking variable specified. </span></span>
-<span><span class="co">#&gt; Covariate: covariate1 - continuous</span></span>
-<span><span class="co">#&gt; Covariate: covariate2 - continuous</span></span>
-<span><span class="co">#&gt; Covariate: covariate3 - categorical</span></span>
+<span><span class="co">#&gt; Covariate: age_at_baseline - continuous</span></span>
+<span><span class="co">#&gt; Covariate: bmi_at_baseline - continuous</span></span>
+<span><span class="co">#&gt; Covariate: sex - categorical</span></span>
 <span><span class="co">#&gt; Number of samples: 98 </span></span>
-<span><span class="co">#&gt; Balance Score: 0.9195397</span></span>
-<span><span class="co">#&gt; Joining with `by = join_by(covariate1, covariate2, covariate3,</span></span>
+<span><span class="co">#&gt; Balance Score: 0.9100344</span></span>
+<span><span class="co">#&gt; Joining with `by = join_by(age_at_baseline, bmi_at_baseline, sex,</span></span>
 <span><span class="co">#&gt; sample_id)`</span></span>
 <span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/utils/head.html" class="external-link">head</a></span><span class="op">(</span><span class="va">best_random_layout</span><span class="op">$</span><span class="va">layout</span><span class="op">)</span></span>
-<span><span class="co">#&gt;   covariate1  covariate2 covariate3 sample_id batch_allocation block_id</span></span>
-<span><span class="co">#&gt; 1  0.2875775 -0.08336907          C   Sample1                2  block_1</span></span>
-<span><span class="co">#&gt; 2  0.7883051  0.25331851          B   Sample2                5  block_1</span></span>
-<span><span class="co">#&gt; 3  0.4089769 -0.02854676          B   Sample3                7  block_2</span></span>
-<span><span class="co">#&gt; 4  0.8830174 -0.04287046          B   Sample4                3  block_2</span></span>
-<span><span class="co">#&gt; 5  0.9404673  1.36860228          C   Sample5                3  block_3</span></span>
-<span><span class="co">#&gt; 6  0.0455565 -0.22577099          A   Sample6                5  block_3</span></span></code></pre></div>
+<span><span class="co">#&gt;   age_at_baseline bmi_at_baseline sex sample_id batch_allocation</span></span>
+<span><span class="co">#&gt; 1        65.70611        22.86157   M  sample_1                2</span></span>
+<span><span class="co">#&gt; 2        65.70611        22.86157   M  sample_2                6</span></span>
+<span><span class="co">#&gt; 3        53.54606        33.09642   M  sample_3                2</span></span>
+<span><span class="co">#&gt; 4        53.54606        33.09642   M  sample_4                5</span></span>
+<span><span class="co">#&gt; 5        43.34455        29.96901   F  sample_5                6</span></span>
+<span><span class="co">#&gt; 6        43.34455        29.96901   F  sample_6                1</span></span>
+<span><span class="co">#&gt;   sample_timepoint treatment subject_id</span></span>
+<span><span class="co">#&gt; 1      timepoint_1 treatment  subject_1</span></span>
+<span><span class="co">#&gt; 2      timepoint_2 treatment  subject_1</span></span>
+<span><span class="co">#&gt; 3      timepoint_1 treatment  subject_2</span></span>
+<span><span class="co">#&gt; 4      timepoint_2 treatment  subject_2</span></span>
+<span><span class="co">#&gt; 5      timepoint_1 treatment  subject_3</span></span>
+<span><span class="co">#&gt; 6      timepoint_2 treatment  subject_3</span></span></code></pre></div>
 <p>We can see that the best random layout is clearly a superior layout
 to the common practice of performing a single randomisation as we did
 above. On the other side of the coin, there are still many possible
 layouts that have superior balance.</p>
 <div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/calculate_balance_score.html">calculate_balance_score</a></span><span class="op">(</span><span class="va">best_random_layout</span><span class="op">[[</span><span class="st">'results'</span><span class="op">]</span><span class="op">]</span><span class="op">$</span><span class="va">p_value</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 0.9195397</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] 0.9100344</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="optimisation-methods-from-machine-learning">Optimisation methods from machine learning<a class="anchor" aria-label="anchor" href="#optimisation-methods-from-machine-learning"></a>
@@ -289,17 +310,17 @@ be explicitly specified using the argument
 <div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">optimal_layout</span> <span class="op">=</span> <span class="fu"><a href="../reference/allocate_samples.html">allocate_samples</a></span><span class="op">(</span><span class="va">toy_data</span>, </span>
 <span>                                 batch_size <span class="op">=</span> <span class="fl">13</span>, </span>
-<span>                                 covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"covariate1"</span>, <span class="st">"covariate2"</span>, <span class="st">"covariate3"</span><span class="op">)</span>,</span>
+<span>                                 covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"age_at_baseline"</span>, <span class="st">"bmi_at_baseline"</span>, <span class="st">"sex"</span><span class="op">)</span>,</span>
 <span>                                 iterations <span class="op">=</span> <span class="fl">300</span>,</span>
 <span>                                 plot_convergence <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span><span class="co">#&gt; No blocking variable specified. </span></span>
-<span><span class="co">#&gt; Covariate: covariate1 - continuous</span></span>
-<span><span class="co">#&gt; Covariate: covariate2 - continuous</span></span>
-<span><span class="co">#&gt; Covariate: covariate3 - categorical</span></span>
+<span><span class="co">#&gt; Covariate: age_at_baseline - continuous</span></span>
+<span><span class="co">#&gt; Covariate: bmi_at_baseline - continuous</span></span>
+<span><span class="co">#&gt; Covariate: sex - categorical</span></span>
 <span><span class="co">#&gt; Number of samples: 98</span></span></code></pre></div>
 <p><img src="methods_for_sample_allocation_to_batches_files/figure-html/unnamed-chunk-10-1.png" width="672"></p>
-<pre><code><span><span class="co">#&gt; Balance Score of final layout: 0.9987868</span></span>
-<span><span class="co">#&gt; Joining with `by = join_by(covariate1, covariate2, covariate3,</span></span>
+<pre><code><span><span class="co">#&gt; Balance Score of final layout: 0.9969619</span></span>
+<span><span class="co">#&gt; Joining with `by = join_by(age_at_baseline, bmi_at_baseline, sex,</span></span>
 <span><span class="co">#&gt; sample_id)`</span></span></code></pre>
 <p>For clarity, we return a plot to make it easy for the user to confirm
 that the simulated annealing algorithm has been run with a sufficient
@@ -309,7 +330,7 @@ score.</p>
 of the best random layout.</p>
 <div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/calculate_balance_score.html">calculate_balance_score</a></span><span class="op">(</span><span class="va">optimal_layout</span><span class="op">[[</span><span class="st">'results'</span><span class="op">]</span><span class="op">]</span><span class="op">$</span><span class="va">p_value</span><span class="op">)</span></span>
-<span><span class="co">#&gt; [1] 0.9987868</span></span></code></pre></div>
+<span><span class="co">#&gt; [1] 0.9971285</span></span></code></pre></div>
 <p>We can also compare the run time of the simulated annealing algorithm
 to that of the best random layout.</p>
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
@@ -317,42 +338,43 @@ to that of the best random layout.</p>
 <span><span class="va">runtime_brute_force</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/system.time.html" class="external-link">system.time</a></span><span class="op">(</span><span class="op">{</span></span>
 <span>  <span class="va">best_random_layout</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/allocate_samples.html">allocate_samples</a></span><span class="op">(</span><span class="va">toy_data</span>, </span>
 <span>                                         batch_size <span class="op">=</span> <span class="fl">13</span>, </span>
-<span>                                         covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"covariate1"</span>, <span class="st">"covariate2"</span>, <span class="st">"covariate3"</span><span class="op">)</span>,</span>
+<span>                                         covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"age_at_baseline"</span>, <span class="st">"bmi_at_baseline"</span>, <span class="st">"sex"</span><span class="op">)</span>,</span>
 <span>                                         iterations <span class="op">=</span> <span class="fl">1000</span>,</span>
 <span>                                         method <span class="op">=</span> <span class="st">"best_random"</span><span class="op">)</span></span>
 <span><span class="op">}</span><span class="op">)</span></span>
 <span><span class="co">#&gt; No blocking variable specified. </span></span>
-<span><span class="co">#&gt; Covariate: covariate1 - continuous</span></span>
-<span><span class="co">#&gt; Covariate: covariate2 - continuous</span></span>
-<span><span class="co">#&gt; Covariate: covariate3 - categorical</span></span>
+<span><span class="co">#&gt; Covariate: age_at_baseline - continuous</span></span>
+<span><span class="co">#&gt; Covariate: bmi_at_baseline - continuous</span></span>
+<span><span class="co">#&gt; Covariate: sex - categorical</span></span>
 <span><span class="co">#&gt; Number of samples: 98 </span></span>
-<span><span class="co">#&gt; Balance Score: 0.9195397</span></span>
-<span><span class="co">#&gt; Joining with `by = join_by(covariate1, covariate2, covariate3,</span></span>
+<span><span class="co">#&gt; Balance Score: 0.9100344</span></span>
+<span><span class="co">#&gt; Joining with `by = join_by(age_at_baseline, bmi_at_baseline, sex,</span></span>
 <span><span class="co">#&gt; sample_id)`</span></span>
 <span></span>
 <span><span class="co"># rerun optimal_layout to calculate run time</span></span>
 <span><span class="va">runtime_optimal</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/system.time.html" class="external-link">system.time</a></span><span class="op">(</span><span class="op">{</span></span>
 <span>  <span class="va">optimal_layout</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/allocate_samples.html">allocate_samples</a></span><span class="op">(</span><span class="va">toy_data</span>, </span>
 <span>                                     batch_size <span class="op">=</span> <span class="fl">13</span>, </span>
-<span>                                     covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"covariate1"</span>, <span class="st">"covariate2"</span>, <span class="st">"covariate3"</span><span class="op">)</span>,</span>
+<span>                                     covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"age_at_baseline"</span>, <span class="st">"bmi_at_baseline"</span>, <span class="st">"sex"</span><span class="op">)</span>,</span>
 <span>                                     method <span class="op">=</span> <span class="st">"simulated_annealing"</span>,</span>
 <span>                                     iterations <span class="op">=</span> <span class="fl">300</span><span class="op">)</span></span>
 <span><span class="op">}</span><span class="op">)</span></span>
 <span><span class="co">#&gt; No blocking variable specified. </span></span>
-<span><span class="co">#&gt; Covariate: covariate1 - continuous</span></span>
-<span><span class="co">#&gt; Covariate: covariate2 - continuous</span></span>
-<span><span class="co">#&gt; Covariate: covariate3 - categorical</span></span>
+<span><span class="co">#&gt; Covariate: age_at_baseline - continuous</span></span>
+<span><span class="co">#&gt; Covariate: bmi_at_baseline - continuous</span></span>
+<span><span class="co">#&gt; Covariate: sex - categorical</span></span>
 <span><span class="co">#&gt; Number of samples: 98</span></span></code></pre></div>
 <p><img src="methods_for_sample_allocation_to_batches_files/figure-html/unnamed-chunk-12-1.png" width="672"></p>
-<pre><code><span><span class="co">#&gt; Balance Score of final layout: 0.9987868</span></span>
-<span><span class="co">#&gt; Joining with `by = join_by(covariate1, covariate2, covariate3,</span></span>
+<pre><code><span><span class="co">#&gt; Balance Score of final layout: 0.9969619</span></span>
+<span><span class="co">#&gt; Joining with `by = join_by(age_at_baseline, bmi_at_baseline, sex,</span></span>
 <span><span class="co">#&gt; sample_id)`</span></span>
 <span></span>
 <span><span class="co"># plot run times</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span>method <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"brute_force"</span>, <span class="st">"simulated_annealing"</span><span class="op">)</span>,</span>
 <span>           time <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">runtime_brute_force</span>, <span class="va">runtime_optimal</span><span class="op">)</span><span class="op">)</span> <span class="op">%&gt;%</span></span>
 <span>  <span class="fu">ggplot</span><span class="op">(</span><span class="fu">aes</span><span class="op">(</span>x <span class="op">=</span> <span class="va">method</span>, y <span class="op">=</span> <span class="va">time</span>, fill <span class="op">=</span> <span class="va">method</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu">geom_col</span><span class="op">(</span><span class="op">)</span></span></code></pre>
+<span>  <span class="fu">geom_col</span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu">labs</span><span class="op">(</span>y <span class="op">=</span> <span class="st">"Times (s)"</span><span class="op">)</span></span></code></pre>
 <p><img src="methods_for_sample_allocation_to_batches_files/figure-html/unnamed-chunk-12-2.png" width="672">
 In addition to generating a more balanced layout, we see that the
 machine learning approach also achieves this with fewer iterations and
@@ -373,18 +395,18 @@ specified variable as follows:</p>
 <div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">optimal_layout_blocked</span> <span class="op">=</span> <span class="fu"><a href="../reference/allocate_samples.html">allocate_samples</a></span><span class="op">(</span><span class="va">toy_data</span>, </span>
 <span>                                 batch_size <span class="op">=</span> <span class="fl">13</span>, </span>
-<span>                                 covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"covariate1"</span>, <span class="st">"covariate2"</span>, <span class="st">"covariate3"</span><span class="op">)</span>,</span>
-<span>                                 blocking_variable <span class="op">=</span> <span class="st">"block_id"</span>,</span>
+<span>                                 covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"age_at_baseline"</span>, <span class="st">"bmi_at_baseline"</span>, <span class="st">"sex"</span><span class="op">)</span>,</span>
+<span>                                 blocking_variable <span class="op">=</span> <span class="st">"subject_id"</span>,</span>
 <span>                                 iterations <span class="op">=</span> <span class="fl">300</span>,</span>
 <span>                                 method <span class="op">=</span> <span class="st">"simulated_annealing"</span><span class="op">)</span></span>
-<span><span class="co">#&gt; Blocking variable:  block_id </span></span>
-<span><span class="co">#&gt; Covariate: covariate1 - continuous</span></span>
-<span><span class="co">#&gt; Covariate: covariate2 - continuous</span></span>
-<span><span class="co">#&gt; Covariate: covariate3 - categorical</span></span>
+<span><span class="co">#&gt; Blocking variable:  subject_id </span></span>
+<span><span class="co">#&gt; Covariate: age_at_baseline - continuous</span></span>
+<span><span class="co">#&gt; Covariate: bmi_at_baseline - continuous</span></span>
+<span><span class="co">#&gt; Covariate: sex - categorical</span></span>
 <span><span class="co">#&gt; Number of samples: 98</span></span></code></pre></div>
 <p><img src="methods_for_sample_allocation_to_batches_files/figure-html/unnamed-chunk-13-1.png" width="672"></p>
-<pre><code><span><span class="co">#&gt; Balance Score of final layout: 0.9976422</span></span>
-<span><span class="co">#&gt; Joining with `by = join_by(covariate1, covariate2, covariate3, block_id,</span></span>
+<pre><code><span><span class="co">#&gt; Balance Score of final layout: 0.9935726</span></span>
+<span><span class="co">#&gt; Joining with `by = join_by(age_at_baseline, bmi_at_baseline, sex, subject_id,</span></span>
 <span><span class="co">#&gt; sample_id)`</span></span></code></pre>
 </div>
 <div class="section level3">
@@ -394,7 +416,7 @@ specified variable as follows:</p>
 layout (a useful sanity check!), we provide a simple function to plot
 the levels of covariates across the batches.</p>
 <div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_layout.html">plot_layout</a></span><span class="op">(</span><span class="va">optimal_layout_blocked</span>, covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"covariate1"</span>, <span class="st">"covariate2"</span>, <span class="st">"covariate3"</span><span class="op">)</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_layout.html">plot_layout</a></span><span class="op">(</span><span class="va">optimal_layout_blocked</span>, covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"age_at_baseline"</span>, <span class="st">"bmi_at_baseline"</span>, <span class="st">"sex"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt; $continuous</span></span></code></pre></div>
 <p><img src="methods_for_sample_allocation_to_batches_files/figure-html/unnamed-chunk-14-1.png" width="672"></p>
 <pre><code><span><span class="co">#&gt; </span></span>

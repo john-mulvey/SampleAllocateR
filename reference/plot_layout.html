@@ -42,7 +42,7 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">plot_layout</span><span class="op">(</span><span class="va">output</span>, id_column <span class="op">=</span> <span class="st">"sample_id"</span>, <span class="va">covariates</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">plot_layout</span><span class="op">(</span><span class="va">output</span>, id_column <span class="op">=</span> <span class="st">"sample_id"</span>, covariates <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -63,7 +63,9 @@
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>The function does not return an object; instead, it directly prints two plots to the R graphics device. The first plot visualizes the distribution of continuous covariates across batches, using a scatter plot for each covariate. The second plot shows the distribution of categorical covariates using a bar plot for each covariate level across batches.</p>
+    <p>A named list containing ggplot2 objects. The list may contain up to two elements:</p><ul><li><p><code>continuous</code>: A ggplot2 object showing the distribution of continuous covariates across batches using scatter plots, with each covariate displayed in a separate facet.</p></li>
+<li><p><code>categorical</code>: A ggplot2 object showing the distribution of categorical covariates across batches using bar plots, with each covariate displayed in a separate facet and different factor levels shown as different colors.</p></li>
+</ul><p>The returned list will only contain elements for covariate types that are present in the data. If no continuous covariates are found, the <code>continuous</code> element will be absent from the list, and similarly for categorical covariates.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -77,24 +79,28 @@
 <span class="r-in"><span><span class="va">allocated_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="allocate_samples.html">allocate_samples</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">my_data</span>,</span></span>
 <span class="r-in"><span>                                   id_column <span class="op">=</span> <span class="st">"sample_id"</span>,</span></span>
 <span class="r-in"><span>                                   method <span class="op">=</span> <span class="st">"simulated_annealing"</span>,</span></span>
-<span class="r-in"><span>                                   covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"covariate1"</span>, <span class="st">"covariate2"</span>, <span class="st">"covariate3"</span><span class="op">)</span>,</span></span>
+<span class="r-in"><span>                                   covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"age_at_baseline"</span>, <span class="st">"bmi_at_baseline"</span>, <span class="st">"sex"</span><span class="op">)</span>,</span></span>
 <span class="r-in"><span>                                   batch_size <span class="op">=</span> <span class="fl">13</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> No blocking variable specified. </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Covariate: covariate1 - continuous</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Covariate: covariate2 - continuous</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Covariate: covariate3 - categorical</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Covariate: age_at_baseline - continuous</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Covariate: bmi_at_baseline - continuous</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Covariate: sex - categorical</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> Number of samples: 100 </span>
 <span class="r-plt img"><img src="plot_layout-1.png" alt="" width="700" height="433"></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> Balance Score of final layout: 0.9999999 </span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> Joining with `by = join_by(covariate1, covariate2, covariate3, sample_id)`</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> Balance Score of final layout: 1 </span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Joining with `by = join_by(age_at_baseline, bmi_at_baseline, sex, sample_id)`</span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="fu">plot_layout</span><span class="op">(</span><span class="va">allocated_data</span>, covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"covariate1"</span>, <span class="st">"covariate2"</span>, <span class="st">"covariate3"</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $continuous</span>
+<span class="r-in"><span><span class="va">plots</span> <span class="op">&lt;-</span> <span class="fu">plot_layout</span><span class="op">(</span><span class="va">allocated_data</span>, covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"age_at_baseline"</span>, <span class="st">"bmi_at_baseline"</span>, <span class="st">"sex"</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># View individual plots</span></span></span>
+<span class="r-in"><span><span class="va">plots</span><span class="op">$</span><span class="va">continuous</span>    <span class="co"># Show continuous covariates plot</span></span></span>
 <span class="r-plt img"><img src="plot_layout-2.png" alt="" width="700" height="433"></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $categorical</span>
+<span class="r-in"><span><span class="va">plots</span><span class="op">$</span><span class="va">categorical</span>   <span class="co"># Show categorical covariates plot</span></span></span>
 <span class="r-plt img"><img src="plot_layout-3.png" alt="" width="700" height="433"></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Save plots</span></span></span>
+<span class="r-in"><span><span class="co"># ggsave("continuous_covariates.png", plots$continuous)</span></span></span>
+<span class="r-in"><span><span class="co"># ggsave("categorical_covariates.png", plots$categorical)</span></span></span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>
