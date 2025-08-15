@@ -48,7 +48,7 @@ We can simply generate a random layout of our toy dataset of 98 samples to a bat
 ```{r}
 single_layout = allocate_samples(toy_data,
                                  batch_size = 13,
-                                 covariates = c("covariate1", "covariate2", "covariate3"),
+                                 covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
                                  method = "random",
                                  blocking_variable = NA)
 
@@ -72,28 +72,28 @@ random_seeds <- sample(1:10000, 1000, replace = FALSE)
 results_list <- lapply(random_seeds, function(seed) {
   allocate_samples(toy_data,
                    batch_size = 13,
-                   covariates = c("covariate1", "covariate2", "covariate3"),
+                   covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
                    method = "random",
                    blocking_variable = NA,
                    seed = seed)
 })
 
-# plot histrogram for a single covariate: covariate1
-probability_covariate1 <- lapply(seq_along(results_list), function(i) {
+# plot histrogram for a single covariate: age_at_baseline
+probability_age_at_baseline <- lapply(seq_along(results_list), function(i) {
   data.frame(
     iteration_number = i,
     p_value = results_list[[i]][['results']] %>%
-      filter(covariate == "covariate1") %>%
+      filter(covariate == "age_at_baseline") %>%
       pull(p_value)
   )
 })
-plot_data_covariate1 <- do.call(rbind, probability_covariate1)
+plot_data_age_at_baseline <- do.call(rbind, probability_age_at_baseline)
 ```
 
 
 ```{r, message=FALSE}
-# plot histrogram of probability that covariate1 does not differ between the batches
-plot_data_covariate1 %>%
+# plot histrogram of probability that age_at_baseline does not differ between the batches
+plot_data_age_at_baseline %>%
   ggplot(aes(x = p_value)) +
   geom_histogram(binwidth = 0.05, boundary = 0)
 ```
@@ -122,7 +122,7 @@ The "brute force" approach of allocating samples to batches would simply then se
 ```{r}
 best_random_layout = allocate_samples(toy_data, 
                                  batch_size = 13, 
-                                 covariates = c("covariate1", "covariate2", "covariate3"),
+                                 covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
                                  iterations = 1000,
                                  method = "best_random")
 
@@ -141,7 +141,7 @@ Even with the processing capabilities of modern desktop computers, brute force a
 ```{r}
 optimal_layout = allocate_samples(toy_data, 
                                  batch_size = 13, 
-                                 covariates = c("covariate1", "covariate2", "covariate3"),
+                                 covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
                                  iterations = 300,
                                  plot_convergence = TRUE)
 ```
@@ -159,7 +159,7 @@ We can also compare the run time of the simulated annealing algorithm to that of
 runtime_brute_force <- system.time({
   best_random_layout <- allocate_samples(toy_data, 
                                          batch_size = 13, 
-                                         covariates = c("covariate1", "covariate2", "covariate3"),
+                                         covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
                                          iterations = 1000,
                                          method = "best_random")
 })
@@ -168,7 +168,7 @@ runtime_brute_force <- system.time({
 runtime_optimal <- system.time({
   optimal_layout <- allocate_samples(toy_data, 
                                      batch_size = 13, 
-                                     covariates = c("covariate1", "covariate2", "covariate3"),
+                                     covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
                                      method = "simulated_annealing",
                                      iterations = 300)
 })
@@ -187,7 +187,7 @@ There is a adage on the design of experiments, commonly attributed to George Box
 ```{r}
 optimal_layout_blocked = allocate_samples(toy_data, 
                                  batch_size = 13, 
-                                 covariates = c("covariate1", "covariate2", "covariate3"),
+                                 covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
                                  blocking_variable = "block_id",
                                  iterations = 300,
                                  method = "simulated_annealing")
@@ -197,7 +197,7 @@ optimal_layout_blocked = allocate_samples(toy_data,
 ## plot an overview of the layout
 In order to easily get an overview of the balance of a particular layout (a useful sanity check!), we provide a simple function to plot the levels of covariates across the batches.
 ```{r}
-plot_layout(optimal_layout_blocked, covariates = c("covariate1", "covariate2", "covariate3"))
+plot_layout(optimal_layout_blocked, covariates = c("age_at_baseline", "bmi_at_baseline", "sex"))
 ```
 
 
