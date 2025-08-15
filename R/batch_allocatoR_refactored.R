@@ -8,72 +8,103 @@ utils::globalVariables(c(
 ## ---------------------------------------------------------------------------------------------------------------------------------
 #' Simulate Data with Optional Blocking
 #'
-#' This function generates a simulated dataset containing a specified number of samples. Users can optionally specify block sizes to group samples into blocks. If the total number of samples is not a multiple of the block size, additional samples are generated to complete the last block.
+#' This function generates a simulated dataset containing subject-level data. Users can optionally specify block sizes to generate multiple samples per subject.
 #'
-#' @param n_samples Integer; the number of samples to generate. If `block_size` is specified and `n_samples` is not a multiple of `block_size`, the function will generate additional samples to ensure all blocks are complete.
-#' @param block_size Integer; the size of each block for blocking variable creation. If `NA` (the default), no blocking is applied. If specified, `block_size` must be a positive integer, and the function will create a blocking variable to group samples into blocks of this size.
+#' @param n_samples Integer; the total number of samples to generate. When `block_size` > 1, this must be a multiple of `block_size`.
+#' @param block_size Integer; the number of samples per subject. If 1 or NULL (default), generates one sample per subject. If > 1, generates multiple samples per subject.
 #' @param seed Integer; the seed for random number generation to ensure reproducibility.
 #'
-#' @return A `data.frame` with columns for sample ID, three covariates (`covariate1`, `covariate2`, `covariate3`), and, if `block_size` is specified, a `block_id` column. The first two covariates are generated from uniform and normal distributions, respectively, while the third is a categorical variable with levels "A", "B", and "C". If blocking is applied, a `block_id` column indicates the block to which each sample belongs.
+#' @return A `data.frame` with the following structure:
+#' - `sample_id`: Unique identifier for each sample
+#' - `age_at_baseline`: Subject's age at baseline (normally distributed, mean=55, sd=10)
+#' - `bmi_at_baseline`: Subject's BMI at baseline (normally distributed, mean=30, sd=5)
+#' - `sex`: Subject's sex ("M" or "F")
+#' - `sample_timepoint`: Timepoint identifier (only present when `block_size` > 1)
+#' - `treatment`: Treatment assignment ("treatment" or "placebo")
+#' - `subject_id`: Subject identifier
 #'
 #' @details
-#' The function allows for the simulation of data with or without blocking. When `block_size` is provided, it ensures that the data is divided into blocks of the specified size, potentially increasing the total number of samples to meet this requirement. This is particularly useful for simulations or analyses where the concept of blocks is relevant.
+#' When `block_size` is greater than 1, the function generates multiple samples per subject, creating a `sample_timepoint` column with labels "timepoint_1", "timepoint_2", etc. Subject-level characteristics (age, BMI, sex, treatment) remain constant across all samples for the same subject.
 #'
 #' @examples
-#' # Generate a dataset without blocking
+#' # Generate data with one sample per subject
 #' simulate_data(n_samples = 100)
 #'
-#' # Generate a dataset with blocking, block size of 10
-#' simulate_data(n_samples = 95, block_size = 10)
+#' # Generate data with multiple samples per subject
+#' simulate_data(n_samples = 102, block_size = 3)
 #'
 #' @importFrom stats rnorm runif
+#' @importFrom dplyr slice mutate select
 #'
 #' @export
 #'
-
-simulate_data <- function(n_samples, block_size = NA, seed = 123) {
+simulate_data <- function(n_samples, block_size = NULL, seed = 123) {
   # Validate input params
   if (!is.numeric(n_samples) || n_samples <= 0 || floor(n_samples) != n_samples) {
     stop("n_samples must be a positive integer")
   }
 
-  if (!is.na(block_size)) {
-    if (!is.numeric(block_size) || block_size <= 0 || floor(block_size) != block_size) {
-      stop("block_size must be a positive integer or NA")
-    }
-    if (block_size > n_samples) {
-      stop("block_size cannot be larger than n_samples")
-    }
+  # Handle NULL block_size (treat as 1)
+  if (is.null(block_size)) {
+    block_size <- 1
+  }
+
+  if (!is.numeric(block_size) || block_size <= 0 || floor(block_size) != block_size) {
+    stop("block_size must be a positive integer or NULL")
   }
 
   if (!is.numeric(seed) || floor(seed) != seed) {
     stop("seed must be an integer")
   }
 
-  # function
+  # Validation for longitudinal mode
+  if (block_size > 1 && n_samples %% block_size != 0) {
+    nearest_lower <- floor(n_samples / block_size) * block_size
+    nearest_upper <- ceiling(n_samples / block_size) * block_size
+    stop("When block_size > 1, n_samples must be a multiple of block_size. ",
+         "Did you mean n_samples = ", nearest_lower, " or n_samples = ", nearest_upper, "?")
+  }
+
+  # Set seed
   set.seed(seed)
 
-  if (missing(block_size)) {
-    data <- data.frame(sample_id = paste0("Sample", 1:n_samples),
-                       covariate1 = runif(n_samples),  # uniform distribtuion
-                       covariate2 = rnorm(n_samples), # normal distribtuion
-                       covariate3 = factor(sample(c("A", "B", "C"), n_samples, replace = TRUE)))
+  # Calculate number of subjects
+  n_subjects <- n_samples / block_size
+
+  # Generate subject-level data
+  subject_data <- data.frame(
+    subject_id = factor(paste0("subject_", 1:n_subjects)),
+    treatment = factor(sample(c("treatment", "placebo"), n_subjects, replace = TRUE)),
+    age_at_baseline = rnorm(n_subjects, 55, 10),
+    bmi_at_baseline = rnorm(n_subjects, 30, 5),
+    sex = factor(sample(c("M", "F"), n_subjects, replace = TRUE))
+  )
+
+  if (block_size == 1) {
+    # Cross-sectional mode: one sample per subject
+    data <- subject_data %>%
+      mutate(sample_id = paste0("sample_", 1:n_samples)) %>%
+      select(sample_id, age_at_baseline, bmi_at_baseline, sex, treatment, subject_id)
 
   } else {
-    n_samples_blocked = ceiling(n_samples/block_size)*block_size
-    if (n_samples_blocked != n_samples) {
-      warning("The number of samples is not a multiple of the block size. We currently require complete blocks, so will simualte more samples than specified")
-    }
+    # Longitudinal mode: multiple timepoints per subject
 
-    data <- data.frame(sample_id = paste0("Sample", 1:n_samples_blocked),
-                        covariate1 = runif(n_samples_blocked), # uniform distribtuion
-                        covariate2 = rnorm(n_samples_blocked), # normal distribtuion
-                        covariate3 = factor(sample(c("A", "B", "C"), n_samples_blocked, replace = TRUE)),
-                        block_id = factor(paste("block", rep(1:ceiling(n_samples_blocked / block_size), each = block_size, length.out = n_samples_blocked), sep = "_")))
-}
+    # Create timepoint labels
+    timepoint_labels <- paste0("timepoint_", 1:block_size)
+
+    # Create full dataset with timepoints
+    data <- subject_data %>%
+      slice(rep(1:n(), each = block_size)) %>%
+      mutate(
+        sample_id = paste0("sample_", 1:n_samples),
+        sample_timepoint = factor(rep(timepoint_labels, times = n_subjects),
+                                  levels = timepoint_labels)
+      ) %>%
+      select(sample_id, age_at_baseline, bmi_at_baseline, sex, sample_timepoint, treatment, subject_id)
+  }
+
   return(data)
 }
-
 
 ## ---------------------------------------------------------------------------------------------------------------------------------
 pad_samples <- function(data, batch_size) {
@@ -511,7 +542,7 @@ simulate_annealing <- function(data,
 #' allocated_data <- allocate_samples(data = my_data,
 #'                                    id_column = "sample_id",
 #'                                    method = "simulated_annealing",
-#'                                    covariates = c("covariate1", "covariate2", "covariate3"),
+#'                                    covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
 #'                                    batch_size = 13)
 #'
 #'
@@ -724,10 +755,10 @@ allocate_samples <- function(data,
 #' allocated_data <- allocate_samples(data = my_data,
 #'                                    id_column = "sample_id",
 #'                                    method = "simulated_annealing",
-#'                                    covariates = c("covariate1", "covariate2", "covariate3"),
+#'                                    covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
 #'                                    batch_size = 13)
 #'
-#' plots <- plot_layout(allocated_data, covariates = c("covariate1", "covariate2", "covariate3"))
+#' plots <- plot_layout(allocated_data, covariates = c("age_at_baseline", "bmi_at_baseline", "sex"))
 #'
 #' # View individual plots
 #' plots$continuous    # Show continuous covariates plot
@@ -835,7 +866,7 @@ plot_layout <- function(output, id_column = "sample_id", covariates = NULL) {
 #' allocated_data <- allocate_samples(data = my_data,
 #'                                    id_column = "sample_id",
 #'                                    method = "simulated_annealing",
-#'                                    covariates = c("covariate1", "covariate2", "covariate3"),
+#'                                    covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
 #'                                    batch_size = 13)
 #'
 #' significant_covariates <- check_significance(allocated_data)

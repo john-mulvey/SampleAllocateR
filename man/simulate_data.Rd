@@ -4,29 +4,38 @@
 \alias{simulate_data}
 \title{Simulate Data with Optional Blocking}
 \usage{
-simulate_data(n_samples, block_size = NA, seed = 123)
+simulate_data(n_samples, block_size = NULL, seed = 123)
 }
 \arguments{
-\item{n_samples}{Integer; the number of samples to generate. If \code{block_size} is specified and \code{n_samples} is not a multiple of \code{block_size}, the function will generate additional samples to ensure all blocks are complete.}
+\item{n_samples}{Integer; the total number of samples to generate. When \code{block_size} > 1, this must be a multiple of \code{block_size}.}
 
-\item{block_size}{Integer; the size of each block for blocking variable creation. If \code{NA} (the default), no blocking is applied. If specified, \code{block_size} must be a positive integer, and the function will create a blocking variable to group samples into blocks of this size.}
+\item{block_size}{Integer; the number of samples per subject. If 1 or NULL (default), generates one sample per subject. If > 1, generates multiple samples per subject.}
 
 \item{seed}{Integer; the seed for random number generation to ensure reproducibility.}
 }
 \value{
-A \code{data.frame} with columns for sample ID, three covariates (\code{covariate1}, \code{covariate2}, \code{covariate3}), and, if \code{block_size} is specified, a \code{block_id} column. The first two covariates are generated from uniform and normal distributions, respectively, while the third is a categorical variable with levels "A", "B", and "C". If blocking is applied, a \code{block_id} column indicates the block to which each sample belongs.
+A \code{data.frame} with the following structure:
+\itemize{
+\item \code{sample_id}: Unique identifier for each sample
+\item \code{age_at_baseline}: Subject's age at baseline (normally distributed, mean=55, sd=10)
+\item \code{bmi_at_baseline}: Subject's BMI at baseline (normally distributed, mean=30, sd=5)
+\item \code{sex}: Subject's sex ("M" or "F")
+\item \code{sample_timepoint}: Timepoint identifier (only present when \code{block_size} > 1)
+\item \code{treatment}: Treatment assignment ("treatment" or "placebo")
+\item \code{subject_id}: Subject identifier
+}
 }
 \description{
-This function generates a simulated dataset containing a specified number of samples. Users can optionally specify block sizes to group samples into blocks. If the total number of samples is not a multiple of the block size, additional samples are generated to complete the last block.
+This function generates a simulated dataset containing subject-level data. Users can optionally specify block sizes to generate multiple samples per subject.
 }
 \details{
-The function allows for the simulation of data with or without blocking. When \code{block_size} is provided, it ensures that the data is divided into blocks of the specified size, potentially increasing the total number of samples to meet this requirement. This is particularly useful for simulations or analyses where the concept of blocks is relevant.
+When \code{block_size} is greater than 1, the function generates multiple samples per subject, creating a \code{sample_timepoint} column with labels "timepoint_1", "timepoint_2", etc. Subject-level characteristics (age, BMI, sex, treatment) remain constant across all samples for the same subject.
 }
 \examples{
-# Generate a dataset without blocking
+# Generate data with one sample per subject
 simulate_data(n_samples = 100)
 
-# Generate a dataset with blocking, block size of 10
-simulate_data(n_samples = 95, block_size = 10)
+# Generate data with multiple samples per subject
+simulate_data(n_samples = 102, block_size = 3)
 
 }

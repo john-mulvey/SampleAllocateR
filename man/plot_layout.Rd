@@ -4,7 +4,7 @@
 \alias{plot_layout}
 \title{Plot the Layout of Samples by Covariate Type}
 \usage{
-plot_layout(output, id_column = "sample_id", covariates)
+plot_layout(output, id_column = "sample_id", covariates = NULL)
 }
 \arguments{
 \item{output}{A lsit created by \code{allocate_samples()}, containing an item called \code{layout} which is  \code{data.frame} containing the layout information, including sample IDs, batch allocation, and covariates. The \code{batch_allocation} column is expected to indicate the batch each sample is assigned to, and covariates can be of numeric or factor type.}
@@ -14,7 +14,12 @@ plot_layout(output, id_column = "sample_id", covariates)
 \item{covariates}{A character vector of covariate names to be visualized. The default value is \code{NULL}, which will visualize all covariates in the layout data frame.}
 }
 \value{
-The function does not return an object; instead, it directly prints two plots to the R graphics device. The first plot visualizes the distribution of continuous covariates across batches, using a scatter plot for each covariate. The second plot shows the distribution of categorical covariates using a bar plot for each covariate level across batches.
+A named list containing ggplot2 objects. The list may contain up to two elements:
+\itemize{
+\item \code{continuous}: A ggplot2 object showing the distribution of continuous covariates across batches using scatter plots, with each covariate displayed in a separate facet.
+\item \code{categorical}: A ggplot2 object showing the distribution of categorical covariates across batches using bar plots, with each covariate displayed in a separate facet and different factor levels shown as different colors.
+}
+The returned list will only contain elements for covariate types that are present in the data. If no continuous covariates are found, the \code{continuous} element will be absent from the list, and similarly for categorical covariates.
 }
 \description{
 This function generates two types of plots for the given layout: one for continuous covariates and another for categorical covariates. It visualizes how samples are allocated across batches, with separate plots for each covariate.
@@ -28,9 +33,17 @@ my_data = simulate_data(n_samples = 100)
 allocated_data <- allocate_samples(data = my_data,
                                    id_column = "sample_id",
                                    method = "simulated_annealing",
-                                   covariates = c("covariate1", "covariate2", "covariate3"),
+                                   covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
                                    batch_size = 13)
 
-plot_layout(allocated_data, covariates = c("covariate1", "covariate2", "covariate3"))
+plots <- plot_layout(allocated_data, covariates = c("age_at_baseline", "bmi_at_baseline", "sex"))
+
+# View individual plots
+plots$continuous    # Show continuous covariates plot
+plots$categorical   # Show categorical covariates plot
+
+# Save plots
+# ggsave("continuous_covariates.png", plots$continuous)
+# ggsave("categorical_covariates.png", plots$categorical)
 
 }
