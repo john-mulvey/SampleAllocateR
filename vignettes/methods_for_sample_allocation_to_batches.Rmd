@@ -177,7 +177,8 @@ runtime_optimal <- system.time({
 data.frame(method = c("brute_force", "simulated_annealing"),
            time = c(runtime_brute_force, runtime_optimal)) %>%
   ggplot(aes(x = method, y = time, fill = method)) +
-  geom_col()
+  geom_col() +
+  labs(y = "Times (s)")
 ```
 In addition to generating a more balanced layout, we see that the machine learning approach also achieves this with fewer iterations and in less run time.
 
@@ -188,7 +189,7 @@ There is a adage on the design of experiments, commonly attributed to George Box
 optimal_layout_blocked = allocate_samples(toy_data, 
                                  batch_size = 13, 
                                  covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
-                                 blocking_variable = "block_id",
+                                 blocking_variable = "subject_id",
                                  iterations = 300,
                                  method = "simulated_annealing")
 ```
