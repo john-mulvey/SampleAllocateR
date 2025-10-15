@@ -271,10 +271,13 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
           return(empty_row)
         }
       }))
-      empty_rows$sample_id <- paste0("padding", seq_len(nrow(empty_rows)))
 
-      # Append new rows to data
-      data <- dplyr::bind_rows(data, empty_rows)
+      # Only add padding if there are unfilled spots
+      if (!is.null(empty_rows) && nrow(empty_rows) > 0) {
+        empty_rows$sample_id <- paste0("padding", seq_len(nrow(empty_rows)))
+        # Append new rows to data
+        data <- dplyr::bind_rows(data, empty_rows)
+      }
 
       layout = data
 
@@ -290,7 +293,7 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
 
       # Check that no block is larger than batch size
       if (any(block_sizes > batch_size)) {
-        stop("One or more blocks are larger than the batch size — cannot allocate.")
+        stop("One or more blocks are larger than the batch size - cannot allocate.")
       }
 
       # Bin-packing: assign blocks to batches
@@ -348,7 +351,8 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
         }
       }))
 
-      if (!is.null(empty_rows)) {
+      # Only add padding if there are unfilled spots
+      if (!is.null(empty_rows) && nrow(empty_rows) > 0) {
         empty_rows$sample_id <- paste0("padding", seq_len(nrow(empty_rows)))
         data <- dplyr::bind_rows(data, empty_rows)
       }
