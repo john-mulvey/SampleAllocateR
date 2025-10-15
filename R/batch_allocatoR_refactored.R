@@ -428,7 +428,7 @@ calculate_balance_score = function(p_values, na.rm = TRUE, balance_metric = "har
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------------------
-allocate_best_random <- function(data, batch_size, iterations, blocking_variable = NA, balance_metric = balance_metric) {
+allocate_best_random <- function(data, batch_size, iterations, blocking_variable = NA, balance_metric = "harmonic_mean") {
 
   # Allocate the number of layouts specified by "iterations"
   many_layouts <- replicate(iterations,
@@ -464,7 +464,7 @@ simulate_annealing <- function(data,
                                cooling_rate,
                                iterations,
                                plot = TRUE,
-                               balance_metric = balance_metric) {
+                               balance_metric = "harmonic_mean") {
   # Step 1: Define the objective function to minimize the sum of p-values
   objective <- function(layout_inc_data, blocking_variable = blocking_variable) {
     metrics <- test_covariates(layout_inc_data, blocking_variable = blocking_variable)
@@ -691,7 +691,7 @@ simulate_annealing_for_unequal_block_size <- function(data,
                                                       cooling_rate,
                                                       iterations,
                                                       plot = TRUE,
-                                                      balance_metric = balance_metric) {
+                                                      balance_metric = "harmonic_mean") {
 
   # Step 1: Define the objective function to minimize the sum of p-values
   objective <- function(layout_inc_data, blocking_variable = blocking_variable) {
