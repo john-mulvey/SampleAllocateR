@@ -239,6 +239,11 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
     block_sizes_table = table(data[[blocking_variable]])
     all_blocks_equal_size <- all(block_sizes_table == block_sizes_table[1])
 
+    # Check if the maximum block size is less than half the batch_size
+    if (max(block_sizes_table) >= (batch_size / 2)) {
+      stop("The maximum number of rows for a single level of the blocking variable exceeds half the batch size - there is little flexibility to create bias free layouts.")
+    }
+
     # --------------------------------------------------
     # Case 2a: Blocking variable with equal block size
     # Randomly assign whole blocks to batches, ensuring blocks stay intact
@@ -290,11 +295,6 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
       # Get block sizes
       block_sizes <- table(data[[blocking_variable]])
       n_blocks <- length(block_sizes)
-
-      # Check that no block is larger than batch size
-      if (any(block_sizes > batch_size)) {
-        stop("One or more blocks are larger than the batch size - cannot allocate.")
-      }
 
       # Bin-packing: assign blocks to batches
       # Create a data frame with block names and sizes
@@ -1345,10 +1345,6 @@ allocate_samples <- function(data,
     if (!id_column %in% data_columns) {
       stop("id_column is not a valid column name in the data.")
     }
-      # Check if the maximum number of rows per level of blocking_variable is less than half the batch_size
-   if (max(table(data[[blocking_variable]])) >= (batch_size / 2)) {
-    stop("The maximum number of rows for a single level of the blocking variable exceeds half the batch size - there is little flexibility to create bias free layouts.")
-  }
   }
 
   # convert any logical covaritates to factors
