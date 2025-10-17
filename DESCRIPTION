@@ -19,6 +19,8 @@ Imports:
     tidyr
 Suggests: 
     knitr,
-    rmarkdown
+    rmarkdown,
+    testthat (>= 3.0.0)
 VignetteBuilder: knitr
 URL: https://john-mulvey.github.io/SampleAllocateR/
+Config/testthat/edition: 3

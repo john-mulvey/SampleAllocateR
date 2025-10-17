@@ -32,7 +32,7 @@ Especially as the costs of performing assays has decreased, there has been a mov
 
 Here we demonstrate a tool to allocate pre-selected samples into these technical batches in a way that maximises the balance of specified covariates. By maximising the balance we maximise our ability to separate technical batch variation from biological effects of interest. This increases the precision of our estimates by reducing the uncertainty in coefficient estimates for our primary predictors variables, and hence gives greater statistical power to detect true effects.
 
-## Generate some simulated data with covarirates
+# Generate some simulated data with covarirates
 First, we generate some simulated data with covariates. We will generate 98 samples with 3 covariates, and then allocate these samples to batches of 13.
 ```{r}
 toy_data = simulate_data(n_samples = 98, block_size = 2)
@@ -41,6 +41,7 @@ head(toy_data)
 ```
 
 
+# Methods to allocate samples to batches
 ## Randomisation
 A common approach reported in the analysis of clinical samples is to simply randomise samples to different batches. Randomisation is frequently used in clinical trials to try to ensure that the treatment groups are balanced with respect to relevant covariates. In this circumstance, covariates for all patients are not known at the time when treatments are allocated and so randomisation our best option to ensure that the control and treatment groups are balanced with respect to these covariates. In statistical terms, there is no bias: the expectation of the value of any given covariates would be equal for both a control and a treatment group: i.e. that if we repeated the experiment many times, the average value of the covariate would be the same for both groups.
 
@@ -183,7 +184,7 @@ data.frame(method = c("brute_force", "simulated_annealing"),
 In addition to generating a more balanced layout, we see that the machine learning approach also achieves this with fewer iterations and in less run time.
 
 
-## Blocking
+# Blocking
 There is a adage on the design of experiments, commonly attributed to George Box, to "block what you can, randomise what you cannot". We have discussed the limitations of randomisation in situations where the covariates for all samples are already known in advance. However, the advice to block variables is still pertinent in our situation, as blocking will completely remove the impact of the technical batch effect upon a blocked predictor variable rather than only mitigate against it. We also implement functionality to block samples within batches by a specified variable as follows:
 ```{r}
 optimal_layout_blocked = allocate_samples(toy_data, 
@@ -201,6 +202,31 @@ In order to easily get an overview of the balance of a particular layout (a usef
 plot_layout(optimal_layout_blocked, covariates = c("age_at_baseline", "bmi_at_baseline", "sex"))
 ```
 
+
+## Unequal block sizes
+In "real world" experiments, it can sometimes be the cases that some samples that we intend to include are missing from our experiment. Situations such as this lead to blocks not being all equally sized. This presents some technical challenges. We implement functionality to deal with this situation, although it should be used with caution. In extreme scenarios, it may not be possible to achieve a balanced layout. Remember that the algorithm implemented in this pacakge seeks to find the _most balanced_ layout, and it is left to the user to evaluate whether this is sufficient for their needs.
+
+Here we modify our toy example to miss some samples from certain subjects.
+
+```{r}
+# randomly remove some samples
+toy_data_with_unequal_blocks <- toy_data %>%
+  slice(-sample(1:nrow(.), 12))
+
+optimal_layout_unequal_blocks = allocate_samples(toy_data_with_unequal_blocks, 
+                                 batch_size = 13, 
+                                 covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
+                                 blocking_variable = "subject_id",
+                                 iterations = 300,
+                                 method = "simulated_annealing")
+```
+
+
+In this case, we nonetheless find a highly balanced layout. Once again, we can plot an overview of the covariates across the different batches.
+
+```{r}
+plot_layout(optimal_layout_unequal_blocks, covariates = c("age_at_baseline", "bmi_at_baseline", "sex"))
+```
 
 # session info
 ```{r}

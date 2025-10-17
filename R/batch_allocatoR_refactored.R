@@ -179,11 +179,43 @@ test_covariates = function(layout, blocking_variable = "block_id"){
   return(test_results)
 }
 ## ---------------------------------------------------------------------------------------------------------------------------------
+## ---------------------------------------------------------------------------------------------------------------------------------
+#' Allocate Samples to Batches with Random Allocation (Internal Function)
+#'
+#' This function randomly allocates samples to batches, with support for blocking variables
+#' including unequal block sizes (using a bin-packing algorithm).
+#'
+#' @param data A data.frame containing the dataset to be allocated. Must include a sample_id column.
+#' @param batch_size Integer specifying the size of each batch.
+#' @param blocking_variable Optional string specifying the blocking variable column name.
+#'   If NA or missing, no blocking is applied.
+#'
+#' @return A list with two elements:
+#'   - layout: data.frame with batch_allocation column added (may include padding rows)
+#'   - results: data.frame with covariate balance test results
+#'
+#' @details
+#' Handles three scenarios:
+#'
+#' **Case 1: No blocking variable**
+#' Samples are randomly allocated to batches without constraints.
+#'
+#' **Case 2a: Blocking variable with equal block size**
+#' Whole blocks are randomly assigned to batches, keeping samples within blocks together.
+#'
+#' **Case 2b: Blocking variable with unequal block size**
+#' Uses first-fit bin-packing algorithm to assign blocks to batches while keeping blocks intact.
+#' Blocks are randomized before packing. This siutation requires a trade-off between bin packing efficiency and randomness
+#' in generating the layout, and so in some cases can use more batches than the minimum possible number.
+#'
+#' @keywords internal
 allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
 
   n_samples <- nrow(data)
 
-  # randomly allocate either samples or blocks
+  # --------------------------------------------------
+  # Case 1: No blocking variable -> simple random allocation
+  # --------------------------------------------------
   if (missing(blocking_variable) || is.na(blocking_variable) || blocking_variable == "") {
 
     # Calculate the number of batches required, pad with empty spaces if required
@@ -197,53 +229,144 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
     data_padded$batch_allocation <- as.factor(batch_allocations)
 
     layout = data_padded
+
+    # --------------------------------------------------
+    # Case 2: Blocking variable present -> check if blocks are equal size
+    # --------------------------------------------------
   } else {
 
-    # check if all blocks are the same size, and stop and print a warning statement if not
-    block_size = table(data[[blocking_variable]])
-    all(block_size == block_size[1])
-    if (!all(block_size == block_size[1])) {
-      stop("Blocks are not all the same size, which is a current requirement of the method")
+    # Check if all blocks are the same size
+    block_sizes_table = table(data[[blocking_variable]])
+    all_blocks_equal_size <- all(block_sizes_table == block_sizes_table[1])
+
+    # Check if the maximum block size is less than half the batch_size
+    if (max(block_sizes_table) >= (batch_size / 2)) {
+      stop("The maximum number of rows for a single level of the blocking variable exceeds half the batch size - there is little flexibility to create bias free layouts.")
     }
 
-    # Calculate the actual number of batches etc needed based on constraints
-    block_size = block_size[1]
-    batches_needed <- ceiling(n_samples / (floor(batch_size / block_size) * block_size))
-    n_blocks <- length(unique(data[[blocking_variable]]))
+    # --------------------------------------------------
+    # Case 2a: Blocking variable with equal block size
+    # Randomly assign whole blocks to batches, ensuring blocks stay intact
+    # --------------------------------------------------
+    if (all_blocks_equal_size) {
 
-    # Generate a random assignment of batch numbers for each block
-    batch_assignments <- rep(1:batches_needed, each = ceiling(n_blocks / batches_needed)) %>%
-      sample(size = n_blocks)
-    batch_assignments <- setNames(batch_assignments, unique(data[[blocking_variable]]))
+      # Calculate the actual number of batches etc needed based on constraints
+      block_size = block_sizes_table[1]
+      batches_needed <- ceiling(n_samples / (floor(batch_size / block_size) * block_size))
+      n_blocks <- length(unique(data[[blocking_variable]]))
 
-    data$batch_allocation <- unlist(lapply(data[[blocking_variable]], function(id) batch_assignments[id])) %>%
-      as.factor()
+      # Generate a random assignment of batch numbers for each block
+      batch_assignments <- rep(1:batches_needed, each = ceiling(n_blocks / batches_needed)) %>%
+        sample(size = n_blocks)
+      batch_assignments <- setNames(batch_assignments, unique(data[[blocking_variable]]))
 
-    # pad empty slots
-    actual_samples_per_batch <- table(data$batch_allocation)
-    unfilled_spots <- batch_size - actual_samples_per_batch # Assuming each batch should have 13 samples
+      data$batch_allocation <- unlist(lapply(data[[blocking_variable]], function(id) batch_assignments[id])) %>%
+        as.factor()
 
-    # Step 3: Create new rows for unfilled spots
-    empty_rows <- do.call(rbind, lapply(names(unfilled_spots), function(batch) {
-      if (unfilled_spots[batch] > 0) {
-        empty_row <- as.data.frame(matrix(NA, nrow = unfilled_spots[batch], ncol = ncol(data)))
-        colnames(empty_row) <- colnames(data)
-        empty_row$batch_allocation <- factor(rep(batch, unfilled_spots[batch]), levels = levels(data$batch_allocation))
-        return(empty_row)
+      # Pad empty slots
+      actual_samples_per_batch <- table(data$batch_allocation)
+      unfilled_spots <- batch_size - actual_samples_per_batch
+
+      # Create new rows for unfilled spots
+      empty_rows <- do.call(rbind, lapply(names(unfilled_spots), function(batch) {
+        if (unfilled_spots[batch] > 0) {
+          empty_row <- as.data.frame(matrix(NA, nrow = unfilled_spots[batch], ncol = ncol(data)))
+          colnames(empty_row) <- colnames(data)
+          empty_row$batch_allocation <- factor(rep(batch, unfilled_spots[batch]), levels = levels(data$batch_allocation))
+          return(empty_row)
+        }
+      }))
+
+      # Only add padding if there are unfilled spots
+      if (!is.null(empty_rows) && nrow(empty_rows) > 0) {
+        empty_rows$sample_id <- paste0("padding", seq_len(nrow(empty_rows)))
+        # Append new rows to data
+        data <- dplyr::bind_rows(data, empty_rows)
       }
-    }))
-    empty_rows$sample_id <- paste0("padding", seq_len(nrow(empty_rows)))
 
-    # Step 4: Append new rows to data
-    data <- dplyr::bind_rows(data, empty_rows)
+      layout = data
 
-    layout = data
+      # --------------------------------------------------
+      # Case 2b: Blocking variable with unequal block size
+      # Use bin-packing algorithm to assign blocks to batches while keeping blocks intact
+      # --------------------------------------------------
+    } else {
+
+      # Get block sizes
+      block_sizes <- table(data[[blocking_variable]])
+      n_blocks <- length(block_sizes)
+
+      # Bin-packing: assign blocks to batches
+      # Create a data frame with block names and sizes
+      block_df <- data.frame(block = names(block_sizes),
+                             size  = as.numeric(block_sizes),
+                             stringsAsFactors = FALSE)
+
+      # Randomize order to ensure random allocation
+      block_df <- block_df[sample(nrow(block_df)), ]
+
+      # Initialize batch tracking
+      batch_capacities <- c()   # current fill levels of each batch
+      batch_assignments <- setNames(integer(n_blocks), block_df$block)
+
+      # Assign each block to a batch using first-fit bin packing
+      for (i in seq_len(nrow(block_df))) {
+        blk <- block_df$block[i]
+        blk_size <- block_df$size[i]
+
+        # Try to fit into an existing batch
+        placed <- FALSE
+        for (b in seq_along(batch_capacities)) {
+          if (batch_capacities[b] + blk_size <= batch_size) {
+            batch_capacities[b] <- batch_capacities[b] + blk_size
+            batch_assignments[blk] <- b
+            placed <- TRUE
+            break
+          }
+        }
+
+        # If no batch fits, start a new one
+        if (!placed) {
+          batch_capacities <- c(batch_capacities, blk_size)
+          batch_assignments[blk] <- length(batch_capacities)
+        }
+      }
+
+      # Assign each sample to its block's batch
+      data$batch_allocation <- unlist(lapply(as.character(data[[blocking_variable]]),
+                                             function(id) batch_assignments[[id]])) %>%
+        as.factor()
+
+      # Pad batches with empty rows if needed
+      actual_samples_per_batch <- table(data$batch_allocation)
+      unfilled_spots <- batch_size - actual_samples_per_batch
+
+      empty_rows <- do.call(rbind, lapply(names(unfilled_spots), function(batch) {
+        if (unfilled_spots[batch] > 0) {
+          empty_row <- as.data.frame(matrix(NA, nrow = unfilled_spots[batch], ncol = ncol(data)))
+          colnames(empty_row) <- colnames(data)
+          empty_row$batch_allocation <- factor(rep(batch, unfilled_spots[batch]),
+                                               levels = levels(data$batch_allocation))
+          return(empty_row)
+        }
+      }))
+
+      # Only add padding if there are unfilled spots
+      if (!is.null(empty_rows) && nrow(empty_rows) > 0) {
+        empty_rows$sample_id <- paste0("padding", seq_len(nrow(empty_rows)))
+        data <- dplyr::bind_rows(data, empty_rows)
+      }
+
+      layout <- data
+    }
   }
 
-  # Test for covariate balance
+  # --------------------------------------------------
+  # Test covariate balance
+  # --------------------------------------------------
   test_results <- test_covariates(layout, blocking_variable = blocking_variable)
 
-  # Return the layout
+  # Return results
   return(list(layout = layout,
               results = test_results))
 }
@@ -305,7 +428,7 @@ calculate_balance_score = function(p_values, na.rm = TRUE, balance_metric = "har
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------------------
-allocate_best_random <- function(data, batch_size, iterations, blocking_variable = NA, balance_metric = balance_metric) {
+allocate_best_random <- function(data, batch_size, iterations, blocking_variable = NA, balance_metric = "harmonic_mean") {
 
   # Allocate the number of layouts specified by "iterations"
   many_layouts <- replicate(iterations,
@@ -341,7 +464,7 @@ simulate_annealing <- function(data,
                                cooling_rate,
                                iterations,
                                plot = TRUE,
-                               balance_metric = balance_metric) {
+                               balance_metric = "harmonic_mean") {
   # Step 1: Define the objective function to minimize the sum of p-values
   objective <- function(layout_inc_data, blocking_variable = blocking_variable) {
     metrics <- test_covariates(layout_inc_data, blocking_variable = blocking_variable)
@@ -513,6 +636,598 @@ simulate_annealing <- function(data,
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------------------
+#' Simulated Annealing Allocation for Unequal Block Sizes (Internal Function)
+#'
+#' This function approximates simulated annealing to extends the standard simulated annealing approach to handle
+#' blocking variables with unequal block sizes. The swapping routine enables swapping of up to 2 blocks between
+#' batches, and can additionally move empty "padding" samples if required. this helps to
+#' prevent the algorithm becoming stuck in local optima.
+#'
+#' @param data A data.frame containing the dataset to be allocated. Must include a sample_id column.
+#' @param covariates A character vector listing the covariate column names to balance.
+#' @param blocking_variable Optional string specifying the blocking variable column name.
+#'   If NA or missing, no blocking is applied.
+#' @param batch_size Integer specifying the size of each batch.
+#' @param temperature Numeric specifying the initial temperature for the annealing process.
+#' @param cooling_rate Numeric between 0 and 1 specifying the rate at which temperature decreases.
+#' @param iterations Integer specifying the number of iterations to run.
+#' @param plot Logical indicating whether to plot optimization progress. Default is TRUE.
+#' @param balance_metric Character string specifying the metric to use ("harmonic_mean" or "product").
+#'
+#' @return A list with three elements:
+#'   - layout: data.frame with batch_allocation column added (may include padding rows)
+#'   - results: data.frame with covariate balance test results
+#'   - optimisation_data: data.frame tracking the optimization process across iterations
+#'
+#' @details
+#' This function addresses the complex problem of optimizing batch allocation when blocks
+#' have unequal sizes.
+#'
+#' The algorithm considers four swap scenarios:
+#'
+#' **Scenario 1:** Single block vs single block (with optional padding)
+#'
+#' **Scenario 2:** Single block vs two blocks (with optional padding)
+#'
+#' **Scenario 3:** Two blocks vs single block (with optional padding)
+#'
+#' **Scenario 4:** Two blocks vs two blocks (with optional padding)
+#'
+#' For each iteration, the algorithm:
+#' 1. Identifies all possible swaps between two randomly selected batches
+#' 2. Randomly selects one valid swap
+#' 3. Evaluates the swap using the balance score
+#' 4. Accepts or rejects based on simulated annealing criteria
+#'
+#' Swaps are constrained to involve fewer than half the samples in a batch to maintain
+#' diversity across batches.
+#'
+#' @keywords internal
+simulate_annealing_for_unequal_block_size <- function(data,
+                                                      covariates,
+                                                      blocking_variable = NA,
+                                                      batch_size,
+                                                      temperature,
+                                                      cooling_rate,
+                                                      iterations,
+                                                      plot = TRUE,
+                                                      balance_metric = "harmonic_mean") {
+
+  # Step 1: Define the objective function to minimize the sum of p-values
+  objective <- function(layout_inc_data, blocking_variable = blocking_variable) {
+    metrics <- test_covariates(layout_inc_data, blocking_variable = blocking_variable)
+    balance_score <- calculate_balance_score(metrics$p_value, balance_metric = balance_metric)
+    return(balance_score)
+  }
+
+  # Step 2: Initial conditions
+  if(is.na(blocking_variable)){
+    current_arrangement <- allocate_single_random(data, batch_size)$layout
+  } else{
+    current_arrangement <- allocate_single_random(data, batch_size, blocking_variable = blocking_variable)$layout
+  }
+
+  initial_value <- objective(current_arrangement, blocking_variable = blocking_variable)
+  current_value <- initial_value
+
+  # Enhanced optimisation data tracking for experimental version
+  optimisation_data <- data.frame(
+    iteration = rep(NA_integer_, iterations),
+    temperature = rep(NA_real_, iterations),
+    objective_value = rep(NA_real_, iterations),
+    batch_a = rep(NA_real_, iterations),
+    batch_b = rep(NA_real_, iterations),
+    batch_a_block_id = rep(NA_character_, iterations),
+    batch_a_block_id_2 = rep(NA_character_, iterations),
+    swap_possible = rep(NA, iterations),
+    batch_b_block_id = rep(NA_character_, iterations),
+    batch_b_block_id_2 = rep(NA_character_, iterations),
+    padding_samples_used = rep(NA_integer_, iterations),
+    padding_sample_ids = rep(NA_character_, iterations),
+    padding_added_to = rep(NA_character_, iterations),
+    swap_size = rep(NA_integer_, iterations)
+  )
+
+  # Check if all blocks have equal sizes (for blocking logic)
+  if (!is.na(blocking_variable)) {
+    block_sizes <- table(current_arrangement[[blocking_variable]])
+    all_block_sizes_equal <- length(unique(block_sizes)) == 1
+  } else {
+    all_block_sizes_equal <- TRUE
+  }
+
+  n_batches <- length(levels(current_arrangement$batch_allocation))
+
+  # Step 3: Simulated annealing
+  for (iteration in 1:iterations) {
+    # Store current values, to show progress over time
+    optimisation_data$iteration[iteration] <- iteration
+    optimisation_data$temperature[iteration] <- temperature
+    optimisation_data$objective_value[iteration] <- current_value
+    optimisation_data$batch_a[iteration] <- batch_a <- sample(1:n_batches, 1)
+    optimisation_data$batch_b[iteration] <- batch_b <- sample(setdiff(1:n_batches, batch_a), 1)
+
+    # Situation 1: no blocking variable
+    if (missing(blocking_variable) || is.na(blocking_variable) || blocking_variable == "") {
+      # swap two samples between batch_a and batch_b
+      ## choose samples at random to swap
+      batch_a_samples <- which(current_arrangement$batch_allocation == batch_a)
+      batch_a_chosen_sample <- sample(batch_a_samples, 1)
+      batch_b_samples <- which(current_arrangement$batch_allocation == batch_b)
+      batch_b_chosen_sample <- sample(batch_b_samples, 1)
+
+      ## swap the samples
+      neighbor_arrangement <- current_arrangement
+      neighbor_arrangement$batch_allocation[batch_a_chosen_sample] <- batch_b
+      neighbor_arrangement$batch_allocation[batch_b_chosen_sample] <- batch_a
+
+      optimisation_data$swap_possible[iteration] <- TRUE
+      optimisation_data$swap_size[iteration] <- 1
+    }
+
+    # Situation 2: blocking with equal block size
+    else if (all_block_sizes_equal) {
+      # if samples are blocked, swap two blocks between batch_a and batch_b
+      ## Choose a block at random from batch_a and batch_b
+      batch_a_samples <- which(current_arrangement$batch_allocation == batch_a &
+                                 !is.na(current_arrangement[[blocking_variable]]))
+      batch_a_block_id <- current_arrangement[[blocking_variable]][sample(batch_a_samples, 1)]
+      batch_b_samples <- which(current_arrangement$batch_allocation == batch_b &
+                                 !is.na(current_arrangement[[blocking_variable]]))
+      batch_b_block_id <- current_arrangement[[blocking_variable]][sample(batch_b_samples, 1)]
+
+      ## Find all samples with the same block_id as the chosen samples in both batches
+      batch_a_block_samples <- which(current_arrangement[[blocking_variable]] == batch_a_block_id)
+      batch_b_block_samples <- which(current_arrangement[[blocking_variable]] == batch_b_block_id)
+
+      ## Create a copy of the current arrangement to modify
+      neighbor_arrangement <- current_arrangement
+      neighbor_arrangement$batch_allocation[batch_a_block_samples] <- batch_b
+      neighbor_arrangement$batch_allocation[batch_b_block_samples] <- batch_a
+
+      optimisation_data$batch_a_block_id[iteration] <- as.character(batch_a_block_id)
+      optimisation_data$batch_b_block_id[iteration] <- as.character(batch_b_block_id)
+      optimisation_data$swap_possible[iteration] <- TRUE
+      optimisation_data$swap_size[iteration] <- length(batch_a_block_samples)
+    }
+
+    # Situation 3: blocking with unequal block size (EXPERIMENTAL ENHANCEMENT)
+    else {
+      batch_a_samples <- which(current_arrangement$batch_allocation == batch_a &
+                                 !is.na(current_arrangement[[blocking_variable]]))
+      batch_a_block_id <- current_arrangement[[blocking_variable]][sample(batch_a_samples, 1)]
+
+      chosen_block_size <- length(which(current_arrangement[[blocking_variable]] == batch_a_block_id))
+
+      # Initialize dataframe to store possible swaps
+      possible_swaps <- data.frame(
+        batch_a_block_id = character(),
+        batch_a_block_id_2 = character(),
+        batch_b_block_id = character(),
+        batch_b_block_id_2 = character(),
+        total_size = integer(),
+        padding_added_to = character(),
+        padding_samples_used = integer(),
+        swap_type = character(),
+        stringsAsFactors = FALSE
+      )
+
+      # Find padding samples by sample_id
+      padding_sample_ids <- current_arrangement$sample_id[grep("padding", current_arrangement$sample_id, ignore.case = TRUE)]
+
+      # Count padding samples in each batch
+      batch_a_padding_ids <- padding_sample_ids[current_arrangement$batch_allocation[match(padding_sample_ids, current_arrangement$sample_id)] == batch_a]
+      batch_b_padding_ids <- padding_sample_ids[current_arrangement$batch_allocation[match(padding_sample_ids, current_arrangement$sample_id)] == batch_b]
+
+      batch_a_padding <- length(batch_a_padding_ids)
+      batch_b_padding <- length(batch_b_padding_ids)
+
+      # Find all samples and blocks in both batches
+      batch_a_samples <- which(current_arrangement$batch_allocation == batch_a &
+                                 !is.na(current_arrangement[[blocking_variable]]))
+      batch_b_samples <- which(current_arrangement$batch_allocation == batch_b &
+                                 !is.na(current_arrangement[[blocking_variable]]))
+
+      if (length(batch_a_samples) > 0 && length(batch_b_samples) > 0) {
+        # Get all unique blocks in both batches with their sizes
+        batch_a_blocks <- unique(current_arrangement[[blocking_variable]][batch_a_samples])
+        batch_b_blocks <- unique(current_arrangement[[blocking_variable]][batch_b_samples])
+
+        batch_a_block_sizes <- sapply(batch_a_blocks, function(block_id) {
+          length(which(current_arrangement[[blocking_variable]] == block_id))
+        })
+        batch_b_block_sizes <- sapply(batch_b_blocks, function(block_id) {
+          length(which(current_arrangement[[blocking_variable]] == block_id))
+        })
+
+        # Get the index of the chosen block in batch_a
+        chosen_block_idx <- which(batch_a_blocks == batch_a_block_id)
+
+        # SCENARIO 1: Single block from batch_a vs single block from batch_b
+        for (j in 1:length(batch_b_blocks)) {
+          batch_b_block <- batch_b_blocks[j]
+          batch_b_size <- batch_b_block_sizes[j]
+
+          # No padding
+          if (chosen_block_size == batch_b_size) {
+            possible_swaps <- rbind(possible_swaps, data.frame(
+              batch_a_block_id = as.character(batch_a_block_id),
+              batch_a_block_id_2 = NA,
+              batch_b_block_id = as.character(batch_b_block),
+              batch_b_block_id_2 = NA,
+              total_size = chosen_block_size,
+              padding_added_to = "none",
+              padding_samples_used = 0,
+              swap_type = "single_vs_single",
+              stringsAsFactors = FALSE
+            ))
+          }
+
+          # Padding to batch_a
+          if (batch_a_padding > 0) {
+            for (pad_count in 1:batch_a_padding) {
+              if (chosen_block_size + pad_count == batch_b_size) {
+                possible_swaps <- rbind(possible_swaps, data.frame(
+                  batch_a_block_id = as.character(batch_a_block_id),
+                  batch_a_block_id_2 = NA,
+                  batch_b_block_id = as.character(batch_b_block),
+                  batch_b_block_id_2 = NA,
+                  total_size = chosen_block_size + pad_count,
+                  padding_added_to = "batch_a",
+                  padding_samples_used = pad_count,
+                  swap_type = "single_vs_single",
+                  stringsAsFactors = FALSE
+                ))
+              }
+            }
+          }
+
+          # Padding to batch_b
+          if (batch_b_padding > 0) {
+            for (pad_count in 1:batch_b_padding) {
+              if (chosen_block_size == batch_b_size + pad_count) {
+                possible_swaps <- rbind(possible_swaps, data.frame(
+                  batch_a_block_id = as.character(batch_a_block_id),
+                  batch_a_block_id_2 = NA,
+                  batch_b_block_id = as.character(batch_b_block),
+                  batch_b_block_id_2 = NA,
+                  total_size = chosen_block_size,
+                  padding_added_to = "batch_b",
+                  padding_samples_used = pad_count,
+                  swap_type = "single_vs_single",
+                  stringsAsFactors = FALSE
+                ))
+              }
+            }
+          }
+        }
+
+        # SCENARIO 2: Single block from batch_a vs two blocks from batch_b
+        if (length(batch_b_blocks) >= 2) {
+          for (j in 1:(length(batch_b_blocks)-1)) {
+            for (k in (j+1):length(batch_b_blocks)) {
+              batch_b_block1 <- batch_b_blocks[j]
+              batch_b_block2 <- batch_b_blocks[k]
+              batch_b_combined_size <- batch_b_block_sizes[j] + batch_b_block_sizes[k]
+
+              # No padding
+              if (chosen_block_size == batch_b_combined_size) {
+                possible_swaps <- rbind(possible_swaps, data.frame(
+                  batch_a_block_id = as.character(batch_a_block_id),
+                  batch_a_block_id_2 = NA,
+                  batch_b_block_id = as.character(batch_b_block1),
+                  batch_b_block_id_2 = as.character(batch_b_block2),
+                  total_size = chosen_block_size,
+                  padding_added_to = "none",
+                  padding_samples_used = 0,
+                  swap_type = "single_vs_two",
+                  stringsAsFactors = FALSE
+                ))
+              }
+
+              # Padding to batch_a
+              if (batch_a_padding > 0) {
+                for (pad_count in 1:batch_a_padding) {
+                  if (chosen_block_size + pad_count == batch_b_combined_size) {
+                    possible_swaps <- rbind(possible_swaps, data.frame(
+                      batch_a_block_id = as.character(batch_a_block_id),
+                      batch_a_block_id_2 = NA,
+                      batch_b_block_id = as.character(batch_b_block1),
+                      batch_b_block_id_2 = as.character(batch_b_block2),
+                      total_size = chosen_block_size + pad_count,
+                      padding_added_to = "batch_a",
+                      padding_samples_used = pad_count,
+                      swap_type = "single_vs_two",
+                      stringsAsFactors = FALSE
+                    ))
+                  }
+                }
+              }
+
+              # Padding to batch_b
+              if (batch_b_padding > 0) {
+                for (pad_count in 1:batch_b_padding) {
+                  if (chosen_block_size == batch_b_combined_size + pad_count) {
+                    possible_swaps <- rbind(possible_swaps, data.frame(
+                      batch_a_block_id = as.character(batch_a_block_id),
+                      batch_a_block_id_2 = NA,
+                      batch_b_block_id = as.character(batch_b_block1),
+                      batch_b_block_id_2 = as.character(batch_b_block2),
+                      total_size = chosen_block_size,
+                      padding_added_to = "batch_b",
+                      padding_samples_used = pad_count,
+                      swap_type = "single_vs_two",
+                      stringsAsFactors = FALSE
+                    ))
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        # SCENARIO 3: Two blocks from batch_a vs single block from batch_b
+        if (length(batch_a_blocks) >= 2) {
+          for (i in 1:length(batch_a_blocks)) {
+            if (i == chosen_block_idx) next  # Skip the already chosen block
+
+            batch_a_block2 <- batch_a_blocks[i]
+            batch_a_combined_size <- chosen_block_size + batch_a_block_sizes[i]
+
+            for (j in 1:length(batch_b_blocks)) {
+              batch_b_block <- batch_b_blocks[j]
+              batch_b_size <- batch_b_block_sizes[j]
+
+              # No padding
+              if (batch_a_combined_size == batch_b_size) {
+                possible_swaps <- rbind(possible_swaps, data.frame(
+                  batch_a_block_id = as.character(batch_a_block_id),
+                  batch_a_block_id_2 = as.character(batch_a_block2),
+                  batch_b_block_id = as.character(batch_b_block),
+                  batch_b_block_id_2 = NA,
+                  total_size = batch_a_combined_size,
+                  padding_added_to = "none",
+                  padding_samples_used = 0,
+                  swap_type = "two_vs_single",
+                  stringsAsFactors = FALSE
+                ))
+              }
+
+              # Padding to batch_a
+              if (batch_a_padding > 0) {
+                for (pad_count in 1:batch_a_padding) {
+                  if (batch_a_combined_size + pad_count == batch_b_size) {
+                    possible_swaps <- rbind(possible_swaps, data.frame(
+                      batch_a_block_id = as.character(batch_a_block_id),
+                      batch_a_block_id_2 = as.character(batch_a_block2),
+                      batch_b_block_id = as.character(batch_b_block),
+                      batch_b_block_id_2 = NA,
+                      total_size = batch_a_combined_size + pad_count,
+                      padding_added_to = "batch_a",
+                      padding_samples_used = pad_count,
+                      swap_type = "two_vs_single",
+                      stringsAsFactors = FALSE
+                    ))
+                  }
+                }
+              }
+
+              # Padding to batch_b
+              if (batch_b_padding > 0) {
+                for (pad_count in 1:batch_b_padding) {
+                  if (batch_a_combined_size == batch_b_size + pad_count) {
+                    possible_swaps <- rbind(possible_swaps, data.frame(
+                      batch_a_block_id = as.character(batch_a_block_id),
+                      batch_a_block_id_2 = as.character(batch_a_block2),
+                      batch_b_block_id = as.character(batch_b_block),
+                      batch_b_block_id_2 = NA,
+                      total_size = batch_a_combined_size,
+                      padding_added_to = "batch_b",
+                      padding_samples_used = pad_count,
+                      swap_type = "two_vs_single",
+                      stringsAsFactors = FALSE
+                    ))
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        # SCENARIO 4: Two blocks from batch_a vs two blocks from batch_b
+        if (length(batch_a_blocks) >= 2 && length(batch_b_blocks) >= 2) {
+          for (i in 1:length(batch_a_blocks)) {
+            if (i == chosen_block_idx) next  # Skip the already chosen block
+
+            batch_a_block2 <- batch_a_blocks[i]
+            batch_a_combined_size <- chosen_block_size + batch_a_block_sizes[i]
+
+            for (j in 1:(length(batch_b_blocks)-1)) {
+              for (k in (j+1):length(batch_b_blocks)) {
+                batch_b_block1 <- batch_b_blocks[j]
+                batch_b_block2 <- batch_b_blocks[k]
+                batch_b_combined_size <- batch_b_block_sizes[j] + batch_b_block_sizes[k]
+
+                # No padding
+                if (batch_a_combined_size == batch_b_combined_size) {
+                  possible_swaps <- rbind(possible_swaps, data.frame(
+                    batch_a_block_id = as.character(batch_a_block_id),
+                    batch_a_block_id_2 = as.character(batch_a_block2),
+                    batch_b_block_id = as.character(batch_b_block1),
+                    batch_b_block_id_2 = as.character(batch_b_block2),
+                    total_size = batch_a_combined_size,
+                    padding_added_to = "none",
+                    padding_samples_used = 0,
+                    swap_type = "two_vs_two",
+                    stringsAsFactors = FALSE
+                  ))
+                }
+
+                # Padding to batch_a
+                if (batch_a_padding > 0) {
+                  for (pad_count in 1:batch_a_padding) {
+                    if (batch_a_combined_size + pad_count == batch_b_combined_size) {
+                      possible_swaps <- rbind(possible_swaps, data.frame(
+                        batch_a_block_id = as.character(batch_a_block_id),
+                        batch_a_block_id_2 = as.character(batch_a_block2),
+                        batch_b_block_id = as.character(batch_b_block1),
+                        batch_b_block_id_2 = as.character(batch_b_block2),
+                        total_size = batch_a_combined_size + pad_count,
+                        padding_added_to = "batch_a",
+                        padding_samples_used = pad_count,
+                        swap_type = "two_vs_two",
+                        stringsAsFactors = FALSE
+                      ))
+                    }
+                  }
+                }
+
+                # Padding to batch_b
+                if (batch_b_padding > 0) {
+                  for (pad_count in 1:batch_b_padding) {
+                    if (batch_a_combined_size == batch_b_combined_size + pad_count) {
+                      possible_swaps <- rbind(possible_swaps, data.frame(
+                        batch_a_block_id = as.character(batch_a_block_id),
+                        batch_a_block_id_2 = as.character(batch_a_block2),
+                        batch_b_block_id = as.character(batch_b_block1),
+                        batch_b_block_id_2 = as.character(batch_b_block2),
+                        total_size = batch_a_combined_size,
+                        padding_added_to = "batch_b",
+                        padding_samples_used = pad_count,
+                        swap_type = "two_vs_two",
+                        stringsAsFactors = FALSE
+                      ))
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      # Ensure we swap fewer than half the samples in a batch
+      if (nrow(possible_swaps) > 0) {
+        possible_swaps <- possible_swaps[possible_swaps$total_size < batch_size/2, ]
+      }
+
+      # Execute swap
+      if (nrow(possible_swaps) == 0) {
+        neighbor_arrangement <- current_arrangement
+        optimisation_data$swap_possible[iteration] <- FALSE
+      } else {
+        # Randomly select one of the possible swaps
+        selected_swap <- possible_swaps[sample(1:nrow(possible_swaps), 1), ]
+
+        # Start with current arrangement
+        neighbor_arrangement <- current_arrangement
+
+        # Get sample IDs for batch_a blocks
+        batch_a_sample_ids <- current_arrangement$sample_id[current_arrangement[[blocking_variable]] == selected_swap$batch_a_block_id]
+        if (!is.na(selected_swap$batch_a_block_id_2)) {
+          batch_a_sample_ids_2 <- current_arrangement$sample_id[current_arrangement[[blocking_variable]] == selected_swap$batch_a_block_id_2]
+          batch_a_all_sample_ids <- c(batch_a_sample_ids, batch_a_sample_ids_2)
+        } else {
+          batch_a_all_sample_ids <- batch_a_sample_ids
+        }
+
+        # Get sample IDs for batch_b blocks
+        batch_b_sample_ids <- current_arrangement$sample_id[current_arrangement[[blocking_variable]] == selected_swap$batch_b_block_id]
+        if (!is.na(selected_swap$batch_b_block_id_2)) {
+          batch_b_sample_ids_2 <- current_arrangement$sample_id[current_arrangement[[blocking_variable]] == selected_swap$batch_b_block_id_2]
+          batch_b_all_sample_ids <- c(batch_b_sample_ids, batch_b_sample_ids_2)
+        } else {
+          batch_b_all_sample_ids <- batch_b_sample_ids
+        }
+
+        # Handle padding if needed
+        padding_sample_ids_to_move <- c()
+        if (selected_swap$padding_samples_used > 0) {
+          if (selected_swap$padding_added_to == "batch_a") {
+            available_padding_ids <- batch_a_padding_ids
+            padding_sample_ids_to_move <- sample(available_padding_ids, selected_swap$padding_samples_used)
+            batch_a_all_sample_ids <- c(batch_a_all_sample_ids, padding_sample_ids_to_move)
+          } else if (selected_swap$padding_added_to == "batch_b") {
+            available_padding_ids <- batch_b_padding_ids
+            padding_sample_ids_to_move <- sample(available_padding_ids, selected_swap$padding_samples_used)
+            batch_b_all_sample_ids <- c(batch_b_all_sample_ids, padding_sample_ids_to_move)
+          }
+        }
+
+        # Execute the swap using sample_ids
+        batch_a_rows <- match(batch_a_all_sample_ids, neighbor_arrangement$sample_id)
+        batch_b_rows <- match(batch_b_all_sample_ids, neighbor_arrangement$sample_id)
+
+        # Perform the swap
+        neighbor_arrangement$batch_allocation[batch_a_rows] <- batch_b
+        neighbor_arrangement$batch_allocation[batch_b_rows] <- batch_a
+
+        # Record swap details in optimisation_data
+        optimisation_data$batch_a_block_id[iteration] <- selected_swap$batch_a_block_id
+        optimisation_data$batch_a_block_id_2[iteration] <- ifelse(is.na(selected_swap$batch_a_block_id_2), NA, selected_swap$batch_a_block_id_2)
+        optimisation_data$batch_b_block_id[iteration] <- selected_swap$batch_b_block_id
+        optimisation_data$batch_b_block_id_2[iteration] <- ifelse(is.na(selected_swap$batch_b_block_id_2), NA, selected_swap$batch_b_block_id_2)
+        optimisation_data$padding_samples_used[iteration] <- selected_swap$padding_samples_used
+        optimisation_data$padding_added_to[iteration] <- selected_swap$padding_added_to
+        optimisation_data$swap_size[iteration] <- selected_swap$total_size
+        optimisation_data$swap_possible[iteration] <- TRUE
+
+        # Store the actual padding sample IDs that were moved
+        if (selected_swap$padding_samples_used > 0) {
+          optimisation_data$padding_sample_ids[iteration] <- paste(padding_sample_ids_to_move, collapse = ",")
+        }
+      }
+    }
+
+    # Calculate the neighbor's value
+    neighbor_value <- objective(neighbor_arrangement, blocking_variable = blocking_variable)
+
+    # Calculate the difference in values
+    delta_value <- neighbor_value - current_value
+
+    # Decide whether to accept the neighbor
+    if (delta_value > 0 || runif(1) < exp(delta_value / temperature)) {
+      current_arrangement <- neighbor_arrangement
+      current_value <- neighbor_value
+    }
+
+    # Reduce the temperature
+    temperature <- temperature * cooling_rate
+  }
+
+  # Plot optimisation, if indicated
+  if (plot == TRUE) {
+    # Plot objective_value vs iteration, with temperature on a second y axis
+    scaleFactor <- max(optimisation_data$objective_value, na.rm = TRUE) / max(optimisation_data$temperature, na.rm = TRUE)
+
+    optimisation_plot <- optimisation_data %>%
+      dplyr::mutate(Temperature = temperature * scaleFactor) %>%
+      dplyr::rename(balance_score = objective_value) %>%
+      tidyr::gather(key = "Variable", value = "Value", balance_score, Temperature) %>%
+      ggplot2::ggplot(ggplot2::aes(x = iteration, y = Value, color = Variable)) +
+      ggplot2::geom_line() +
+      ggplot2::ggtitle("Optimisation data (Experimental Version)") +
+      ggplot2::scale_y_continuous(name = "Balance Score",
+                                  sec.axis = ggplot2::sec_axis(~./scaleFactor, name = "Temperature"))
+
+    print(optimisation_plot)
+  }
+
+  # Select final layout
+  optimal_layout <- current_arrangement
+  optimal_value <- current_value
+
+  cat("Balance Score of final layout:", optimal_value, "\n")
+
+  # Test covariate balance of final layout
+  optimal_layout_result <- test_covariates(optimal_layout, blocking_variable = blocking_variable)
+
+  # Return the layout (same structure as original)
+  return(list(layout = optimal_layout,
+              results = optimal_layout_result,
+              optimisation_data = optimisation_data))
+}
+## ---------------------------------------------------------------------------------------------------------------------------------
 #' Allocate Samples to Batches Using Specified Method
 #'
 #' This function allocates samples to batches based on the specified method, which can be random allocation, best random allocation, or simulated annealing. It supports optional blocking and handles various types of covariates.
@@ -630,10 +1345,6 @@ allocate_samples <- function(data,
     if (!id_column %in% data_columns) {
       stop("id_column is not a valid column name in the data.")
     }
-      # Check if the maximum number of rows per level of blocking_variable is less than half the batch_size
-   if (max(table(data[[blocking_variable]])) >= (batch_size / 2)) {
-    stop("The maximum number of rows for a single level of the blocking variable exceeds half the batch size - there is little flexibility to create bias free layouts.")
-  }
   }
 
   # convert any logical covaritates to factors
@@ -711,14 +1422,40 @@ allocate_samples <- function(data,
                                   iterations = iterations,
                                   balance_metric = balance_metric)
   } else if (method == "simulated_annealing") {
-    output = simulate_annealing(data = data,
-                                batch_size = batch_size,
-                                blocking_variable = blocking_variable,
-                                temperature = temperature,
-                                cooling_rate = cooling_rate,
-                                iterations = iterations,
-                                plot = plot_convergence,
-                                balance_metric = balance_metric)
+    # Check if we need to use the approximate version for unequal block sizes
+    use_approximate_for_unequal_block_size <- FALSE
+
+    if (!missing(blocking_variable) && !is.na(blocking_variable) && blocking_variable != "") {
+      # Check if blocks have unequal sizes
+      block_sizes_table <- table(data[[blocking_variable]])
+      all_blocks_equal_size <- all(block_sizes_table == block_sizes_table[1])
+
+      if (!all_blocks_equal_size) {
+        use_approximate_for_unequal_block_size <- TRUE
+      }
+    }
+
+    if (use_approximate_for_unequal_block_size) {
+      # Use approximate version for unequal block sizes
+      output = simulate_annealing_for_unequal_block_size(data = data,
+                                                          batch_size = batch_size,
+                                                          blocking_variable = blocking_variable,
+                                                          temperature = temperature,
+                                                          cooling_rate = cooling_rate,
+                                                          iterations = iterations,
+                                                          plot = plot_convergence,
+                                                          balance_metric = balance_metric)
+    } else {
+      # Use standard version for no blocking or equal block sizes
+      output = simulate_annealing(data = data,
+                                  batch_size = batch_size,
+                                  blocking_variable = blocking_variable,
+                                  temperature = temperature,
+                                  cooling_rate = cooling_rate,
+                                  iterations = iterations,
+                                  plot = plot_convergence,
+                                  balance_metric = balance_metric)
+    }
   } else {
     stop("Invalid method specified")
   }
