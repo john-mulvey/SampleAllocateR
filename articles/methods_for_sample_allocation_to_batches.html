@@ -85,9 +85,10 @@ This increases the precision of our estimates by reducing the
 uncertainty in coefficient estimates for our primary predictors
 variables, and hence gives greater statistical power to detect true
 effects.</p>
-<div class="section level3">
-<h3 id="generate-some-simulated-data-with-covarirates">Generate some simulated data with covarirates<a class="anchor" aria-label="anchor" href="#generate-some-simulated-data-with-covarirates"></a>
-</h3>
+</div>
+<div class="section level2">
+<h2 id="generate-some-simulated-data-with-covarirates">Generate some simulated data with covarirates<a class="anchor" aria-label="anchor" href="#generate-some-simulated-data-with-covarirates"></a>
+</h2>
 <p>First, we generate some simulated data with covariates. We will
 generate 98 samples with 3 covariates, and then allocate these samples
 to batches of 13.</p>
@@ -110,6 +111,9 @@ to batches of 13.</p>
 <span><span class="co">#&gt; 5  subject_3</span></span>
 <span><span class="co">#&gt; 6  subject_3</span></span></code></pre></div>
 </div>
+<div class="section level2">
+<h2 id="methods-to-allocate-samples-to-batches">Methods to allocate samples to batches<a class="anchor" aria-label="anchor" href="#methods-to-allocate-samples-to-batches"></a>
+</h2>
 <div class="section level3">
 <h3 id="randomisation">Randomisation<a class="anchor" aria-label="anchor" href="#randomisation"></a>
 </h3>
@@ -380,9 +384,10 @@ In addition to generating a more balanced layout, we see that the
 machine learning approach also achieves this with fewer iterations and
 in less run time.</p>
 </div>
-<div class="section level3">
-<h3 id="blocking">Blocking<a class="anchor" aria-label="anchor" href="#blocking"></a>
-</h3>
+</div>
+<div class="section level2">
+<h2 id="blocking">Blocking<a class="anchor" aria-label="anchor" href="#blocking"></a>
+</h2>
 <p>There is a adage on the design of experiments, commonly attributed to
 George Box, to “block what you can, randomise what you cannot”. We have
 discussed the limitations of randomisation in situations where the
@@ -408,7 +413,6 @@ specified variable as follows:</p>
 <pre><code><span><span class="co">#&gt; Balance Score of final layout: 0.9935726</span></span>
 <span><span class="co">#&gt; Joining with `by = join_by(age_at_baseline, bmi_at_baseline, sex, subject_id,</span></span>
 <span><span class="co">#&gt; sample_id)`</span></span></code></pre>
-</div>
 <div class="section level3">
 <h3 id="plot-an-overview-of-the-layout">plot an overview of the layout<a class="anchor" aria-label="anchor" href="#plot-an-overview-of-the-layout"></a>
 </h3>
@@ -423,11 +427,56 @@ the levels of covariates across the batches.</p>
 <span><span class="co">#&gt; $categorical</span></span></code></pre>
 <p><img src="methods_for_sample_allocation_to_batches_files/figure-html/unnamed-chunk-14-2.png" width="672"></p>
 </div>
+<div class="section level3">
+<h3 id="unequal-block-sizes">Unequal block sizes<a class="anchor" aria-label="anchor" href="#unequal-block-sizes"></a>
+</h3>
+<p>In “real world” experiments, it can sometimes be the cases that some
+samples that we intend to include are missing from our experiment.
+Situations such as this lead to blocks not being all equally sized. This
+presents some technical challenges. We implement functionality to deal
+with this situation, although it should be used with caution. In extreme
+scenarios, it may not be possible to achieve a balanced layout. Remember
+that the algorithm implemented in this pacakge seeks to find the
+<em>most balanced</em> layout, and it is left to the user to evaluate
+whether this is sufficient for their needs.</p>
+<p>Here we modify our toy example to miss some samples from certain
+subjects.</p>
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># randomly remove some samples</span></span>
+<span><span class="va">toy_data_with_unequal_blocks</span> <span class="op">&lt;-</span> <span class="va">toy_data</span> <span class="op">%&gt;%</span></span>
+<span>  <span class="fu">slice</span><span class="op">(</span><span class="op">-</span><span class="fu"><a href="https://rdrr.io/r/base/sample.html" class="external-link">sample</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">.</span><span class="op">)</span>, <span class="fl">12</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">optimal_layout_unequal_blocks</span> <span class="op">=</span> <span class="fu"><a href="../reference/allocate_samples.html">allocate_samples</a></span><span class="op">(</span><span class="va">toy_data_with_unequal_blocks</span>, </span>
+<span>                                 batch_size <span class="op">=</span> <span class="fl">13</span>, </span>
+<span>                                 covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"age_at_baseline"</span>, <span class="st">"bmi_at_baseline"</span>, <span class="st">"sex"</span><span class="op">)</span>,</span>
+<span>                                 blocking_variable <span class="op">=</span> <span class="st">"subject_id"</span>,</span>
+<span>                                 iterations <span class="op">=</span> <span class="fl">300</span>,</span>
+<span>                                 method <span class="op">=</span> <span class="st">"simulated_annealing"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Blocking variable:  subject_id </span></span>
+<span><span class="co">#&gt; Covariate: age_at_baseline - continuous</span></span>
+<span><span class="co">#&gt; Covariate: bmi_at_baseline - continuous</span></span>
+<span><span class="co">#&gt; Covariate: sex - categorical</span></span>
+<span><span class="co">#&gt; Number of samples: 86</span></span></code></pre></div>
+<p><img src="methods_for_sample_allocation_to_batches_files/figure-html/unnamed-chunk-15-1.png" width="672"></p>
+<pre><code><span><span class="co">#&gt; Balance Score of final layout: 0.9911573</span></span>
+<span><span class="co">#&gt; Joining with `by = join_by(age_at_baseline, bmi_at_baseline, sex, subject_id,</span></span>
+<span><span class="co">#&gt; sample_id)`</span></span></code></pre>
+<p>In this case, we nonetheless find a highly balanced layout. Once
+again, we can plot an overview of the covariates across the different
+batches.</p>
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_layout.html">plot_layout</a></span><span class="op">(</span><span class="va">optimal_layout_unequal_blocks</span>, covariates <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"age_at_baseline"</span>, <span class="st">"bmi_at_baseline"</span>, <span class="st">"sex"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt; $continuous</span></span></code></pre></div>
+<p><img src="methods_for_sample_allocation_to_batches_files/figure-html/unnamed-chunk-16-1.png" width="672"></p>
+<pre><code><span><span class="co">#&gt; </span></span>
+<span><span class="co">#&gt; $categorical</span></span></code></pre>
+<p><img src="methods_for_sample_allocation_to_batches_files/figure-html/unnamed-chunk-16-2.png" width="672"></p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="session-info">session info<a class="anchor" aria-label="anchor" href="#session-info"></a>
 </h2>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/sessionInfo.html" class="external-link">sessionInfo</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="co">#&gt; R version 4.5.1 (2025-06-13)</span></span>
 <span><span class="co">#&gt; Platform: x86_64-pc-linux-gnu</span></span>

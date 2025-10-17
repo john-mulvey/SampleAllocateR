@@ -3,7 +3,7 @@ pkgdown: 2.1.3
 pkgdown_sha: ~
 articles:
   methods_for_sample_allocation_to_batches: methods_for_sample_allocation_to_batches.html
-last_built: 2025-10-17T08:52Z
+last_built: 2025-10-17T08:57Z
 urls:
   reference: https://john-mulvey.github.io/SampleAllocateR/reference
   article: https://john-mulvey.github.io/SampleAllocateR/articles
