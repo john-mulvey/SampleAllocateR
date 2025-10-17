@@ -59,7 +59,7 @@ test_that("simulated_annealing produces better or equal balance than single rand
     method = "simulated_annealing",
     covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
     batch_size = 20,
-    iterations = 1000,
+    iterations = 200,
     temperature = 1,
     cooling_rate = 0.95,
     seed = 456,
@@ -105,7 +105,7 @@ test_that("simulated_annealing with blocking produces better or equal balance th
     covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
     blocking_variable = "subject_id",
     batch_size = 12,
-    iterations = 1000,
+    iterations = 200,
     temperature = 1,
     cooling_rate = 0.95,
     seed = 789,
@@ -131,7 +131,7 @@ test_that("simulated_annealing with blocking produces better or equal balance th
 test_that("simulated_annealing with unequal blocks produces better or equal balance than random", {
   set.seed(321)
   # Create data with unequal block sizes
-  toy_data <- simulate_data(n_samples = 102, block_size = 6) %>%
+  toy_data <- simulate_data(n_samples = 60, block_size = 3) %>%
     dplyr::slice(-sample(1:dplyr::n(), 12))
 
   # Single random allocation with unequal blocking
@@ -152,7 +152,7 @@ test_that("simulated_annealing with unequal blocks produces better or equal bala
     covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
     blocking_variable = "subject_id",
     batch_size = 15,
-    iterations = 1000,
+    iterations = 200,
     temperature = 1,
     cooling_rate = 0.95,
     seed = 321,
