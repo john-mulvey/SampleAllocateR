@@ -17,7 +17,8 @@ allocate_samples(
   seed = 123,
   plot_convergence = TRUE,
   collapse_rare_factors = FALSE,
-  balance_metric = "harmonic_mean"
+  balance_metric = "harmonic_mean",
+  balance_type = "p_value"
 )
 }
 \arguments{
@@ -46,7 +47,32 @@ allocate_samples(
 \item{collapse_rare_factors}{= FALSE A logical indicating whether to collapse rare factor levels in the covariates. The default is \code{FALSE}. Factor levels that are present with counts either less than 5 or in 0.05*batch_size are collapsed into a single level "other".
 Please note that the layout returned will contain these collapsed factor levels, rather than your original input data.}
 
-\item{balance_metric}{A character string specifying the metric to use for calculating the balance score. Valid options are "harmonic_mean" (default) and "product".}
+\item{balance_metric}{A character string specifying how to combine multiple
+covariate metrics. Valid options are:
+\itemize{
+\item \code{"harmonic_mean"} (default): Non-compensatory combination.
+Ensures all covariates must be balanced - no single well-balanced
+covariate can compensate for a poorly balanced one. More sensitive
+to the worst-balanced covariate.
+\item \code{"product"}: Product of all metrics. Very sensitive to any
+poorly balanced covariate. Can become numerically small with many covariates.
+}}
+
+\item{balance_type}{A character string specifying what metric to calculate
+for each covariate. Valid options are:
+\itemize{
+\item \code{"p_value"} (default): Uses p-values from statistical tests
+(Kruskal-Wallis for continuous covariates, Fisher's exact test for
+categorical covariates). Tests whether covariate distributions differ
+significantly between batches. Higher p-values indicate better balance.
+\item \code{"effect_size"}: Uses effect sizes measuring the magnitude of
+association between covariates and batch assignment. Uses Cramér's V
+for categorical covariates and eta (from ANOVA) for continuous covariates.
+Effect sizes range from 0 (no association, perfect balance) to 1
+(maximum association). Note: effect sizes are internally transformed
+as (1 - effect_size) so that higher values indicate better balance,
+consistent with p-values.
+}}
 }
 \value{
 An object containing the allocation layout of samples to batches, along with any specified blocking and covariate adjustments. The exact structure of the return value depends on the allocation method used.

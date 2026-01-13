@@ -13,7 +13,8 @@ simulate_annealing_for_unequal_block_size(
   cooling_rate,
   iterations,
   plot = TRUE,
-  balance_metric = "harmonic_mean"
+  balance_metric = "harmonic_mean",
+  balance_type = "p_value"
 )
 }
 \arguments{

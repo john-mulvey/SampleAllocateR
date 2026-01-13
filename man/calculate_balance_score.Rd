@@ -5,39 +5,70 @@
 \title{Calculate Balance Score}
 \usage{
 calculate_balance_score(
-  p_values,
+  p_values = NULL,
+  effect_sizes = NULL,
   na.rm = TRUE,
-  balance_metric = "harmonic_mean"
+  balance_metric = "harmonic_mean",
+  balance_type = "p_value"
 )
 }
 \arguments{
-\item{p_values}{A numeric vector containing p-values from individual covariate balance tests.
+\item{p_values}{A numeric vector containing p-values from individual covariate
+balance tests. Required when \code{balance_type = "p_value"}.
+All values must be between 0 and 1.}
+
+\item{effect_sizes}{A numeric vector containing effect sizes (Cramér's V or eta).
+Required when \code{balance_type = "effect_size"}.
 All values must be between 0 and 1.}
 
 \item{na.rm}{Logical; if TRUE (default), NA values are removed before calculation.
 If FALSE and NA values are present, the function will return NA.}
 
-\item{balance_metric}{A character string specifying the metric to use for calculating the balance score. Valid options are "harmonic_mean" (default) and "product".}
+\item{balance_metric}{A character string specifying how to combine multiple metrics.
+Valid options are:
+\itemize{
+\item \code{"harmonic_mean"} (default): Non-compensatory combination.
+Ensures all covariates must be balanced (no covariate can compensate
+for poor balance in another).
+\item \code{"product"}: Very sensitive to any poorly balanced covariate.
+}}
+
+\item{balance_type}{A character string specifying what metric to calculate.
+Valid options are:
+\itemize{
+\item \code{"p_value"} (default): Uses p-values from statistical tests.
+Tests whether covariate distributions differ significantly between batches.
+\item \code{"effect_size"}: Uses effect sizes measuring magnitude of associations.
+Similar to correlation-based approaches but using valid statistical measures.
+}}
 }
 \value{
 A numeric value representing the overall balance score.
-Higher values indicate better covariate balance.
+For all combinations, HIGHER values indicate better covariate balance.
 }
 \description{
-This function calculates a covariate balance score by calculating (by default) the harmonic mean of the p-values from individual covariate balance tests.
-This does not require the assumptions that the covariates are independent.
+This function calculates a covariate balance score by combining individual
+covariate metrics using either harmonic mean or product.
+}
+\details{
+The function transforms effect sizes as (1 - effect_size) so that lower effect
+sizes (better balance) produce higher scores, matching the direction of p-values.
+This ensures all metrics can be maximized by the optimization algorithm.
 }
 \examples{
-# Example with well-balanced covariates
+# Statistical significance with harmonic mean (default)
 p_vals <- c(0.8, 0.9, 0.85)
-calculate_balance_score(p_vals)
+calculate_balance_score(p_values = p_vals)
 
-# Example with poorly balanced covariates
-p_vals <- c(0.01, 0.02, 0.03)
-calculate_balance_score(p_vals)
+# Effect size with harmonic mean
+effects <- c(0.05, 0.03, 0.04)  # Small effect sizes = good balance
+calculate_balance_score(effect_sizes = effects, balance_type = "effect_size")
+
+# Statistical significance with product
+calculate_balance_score(p_values = p_vals, balance_metric = "product")
 
 # Handling NA values
 p_vals_with_na <- c(0.8, NA, 0.85)
-calculate_balance_score(p_vals_with_na, na.rm = TRUE)
+calculate_balance_score(p_values = p_vals_with_na, na.rm = TRUE)
 
 }
