@@ -1,7 +1,7 @@
 ## ---------------------------------------------------------------------------------------------------------------------------------
 # prevent R CMD check warning about missing visible binding for global varaiables (due to non-standard evaluation by dplyr)
 utils::globalVariables(c(
-  "Temperature", "Value", "Variable", "adj_p_value", "batch", "batch_allocation", "covariate", "balance_score", "objective_value",
+  "Temperature", "Value", "Variable", "adj_p_value", "batch", "batch_allocation", "covariate", "balance_score", "effect_size", "objective_value",
   "p_value", "sample_id", "value"
 ))
 
@@ -178,6 +178,95 @@ test_covariates = function(layout, blocking_variable = "block_id"){
 
   return(test_results)
 }
+
+## ---------------------------------------------------------------------------------------------------------------------------------
+#' Calculate Effect Sizes Between Covariates and Batch Allocation
+#'
+#' Calculate appropriate effect size measures for associations between covariates
+#' and batch allocation. Uses Cramér's V for categorical-categorical, eta (from ANOVA)
+#' for continuous-categorical combinations.
+#'
+#' @param layout Data frame with batch_allocation column
+#' @param blocking_variable Optional blocking variable to exclude from calculations
+#'
+#' @return Data frame with columns: covariate, effect_size
+#'
+#' @details
+#' Effect sizes are scaled to be comparable to correlations (0-1 range):
+#' - Categorical covariates: Uses Cramér's V with corrected formula
+#' - Continuous covariates: Uses eta (square root of eta-squared from ANOVA)
+#'
+#' Lower effect sizes indicate better balance (weaker association between
+#' covariate and batch assignment).
+#'
+#' @keywords internal
+calculate_effect_sizes <- function(layout, blocking_variable = "block_id") {
+  effect_results <- data.frame(covariate = character(), effect_size = numeric())
+
+  # Continuous covariates - use eta (sqrt of eta-squared from ANOVA)
+  continuous_vars <- names(layout)[sapply(layout, is.numeric)]
+  continuous_vars <- continuous_vars[!continuous_vars %in% c("batch_allocation", blocking_variable)]
+
+  if(length(continuous_vars) > 0) {
+    effect_results_continuous <- layout %>%
+      dplyr::filter(!grepl("padding", sample_id)) %>%
+      dplyr::mutate(batch = batch_allocation) %>%
+      dplyr::select(-sample_id) %>%
+      tidyr::pivot_longer(cols = any_of(continuous_vars), names_to = "covariate", values_to = "value") %>%
+      dplyr::group_by(covariate) %>%
+      dplyr::summarise(effect_size = {
+        # Remove NA values for this covariate
+        valid_data <- !is.na(value)
+        if (sum(valid_data) < 3) {
+          NA  # Not enough data
+        } else {
+          # Calculate eta-squared (proportion of variance explained by batch)
+          fit <- stats::aov(value[valid_data] ~ batch[valid_data])
+          ss_total <- sum((value[valid_data] - mean(value[valid_data]))^2)
+          ss_between <- stats::anova(fit)[1, "Sum Sq"]
+          eta_squared <- ss_between / ss_total
+          sqrt(eta_squared)  # Return eta (not eta-squared) to match correlation scale
+        }
+      })
+
+    effect_results <- dplyr::bind_rows(effect_results, effect_results_continuous)
+  }
+
+  # Categorical covariates - use Cramér's V (with corrected formula)
+  factor_vars <- names(layout)[sapply(layout, is.factor)]
+  factor_vars <- factor_vars[!factor_vars %in% c("batch_allocation", blocking_variable)]
+
+  if(length(factor_vars) > 0) {
+    effect_results_factor <- layout %>%
+      dplyr::filter(!grepl("padding", sample_id)) %>%
+      dplyr::mutate(batch = batch_allocation) %>%
+      dplyr::select(-sample_id) %>%
+      tidyr::pivot_longer(cols = any_of(factor_vars), names_to = "covariate", values_to = "value") %>%
+      dplyr::group_by(covariate) %>%
+      dplyr::summarise(effect_size = suppressWarnings({
+        contingency_table <- table(droplevels(value), batch)
+        if (sum(rowSums(contingency_table) == 0) > 0) {
+          NA  # Empty cells in contingency table
+        } else {
+          # Calculate Cramér's V with CORRECTED formula
+          # V = sqrt(χ² / (n × (min(k,r) - 1)))
+          # NOT the buggy Omixer formula: sqrt(χ² / (n × min(k,r) - 1))
+          # Note: We only use the chi-squared statistic, not the p-value,
+          # so warnings about p-value approximation can be safely suppressed
+          chi_stat <- stats::chisq.test(contingency_table, correct = FALSE)$statistic
+          n <- sum(contingency_table)
+          k <- nrow(contingency_table)
+          r <- ncol(contingency_table)
+          sqrt(chi_stat / (n * (min(k, r) - 1)))
+        }
+      }))
+
+    effect_results <- dplyr::bind_rows(effect_results, effect_results_factor)
+  }
+
+  return(effect_results)
+}
+
 ## ---------------------------------------------------------------------------------------------------------------------------------
 ## ---------------------------------------------------------------------------------------------------------------------------------
 #' Allocate Samples to Batches with Random Allocation (Internal Function)
@@ -374,61 +463,107 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
 ## ---------------------------------------------------------------------------------------------------------------------------------
 #' Calculate Balance Score
 #'
-#' This function calculates a covariate balance score by calculating (by default) the harmonic mean of the p-values from individual covariate balance tests.
-#' This does not require the assumptions that the covariates are independent.
+#' This function calculates a covariate balance score by combining individual
+#' covariate metrics using either harmonic mean or product.
 #'
-#' @param p_values A numeric vector containing p-values from individual covariate balance tests.
+#' @param p_values A numeric vector containing p-values from individual covariate
+#'   balance tests. Required when \code{balance_type = "p_value"}.
+#'   All values must be between 0 and 1.
+#' @param effect_sizes A numeric vector containing effect sizes (Cramér's V or eta).
+#'   Required when \code{balance_type = "effect_size"}.
 #'   All values must be between 0 and 1.
 #' @param na.rm Logical; if TRUE (default), NA values are removed before calculation.
 #'   If FALSE and NA values are present, the function will return NA.
-#' @param balance_metric A character string specifying the metric to use for calculating the balance score. Valid options are "harmonic_mean" (default) and "product".
+#' @param balance_metric A character string specifying how to combine multiple metrics.
+#'   Valid options are:
+#'   \itemize{
+#'     \item \code{"harmonic_mean"} (default): Non-compensatory combination.
+#'           Ensures all covariates must be balanced (no covariate can compensate
+#'           for poor balance in another).
+#'     \item \code{"product"}: Very sensitive to any poorly balanced covariate.
+#'   }
+#' @param balance_type A character string specifying what metric to calculate.
+#'   Valid options are:
+#'   \itemize{
+#'     \item \code{"p_value"} (default): Uses p-values from statistical tests.
+#'           Tests whether covariate distributions differ significantly between batches.
+#'     \item \code{"effect_size"}: Uses effect sizes measuring magnitude of associations.
+#'           Similar to correlation-based approaches but using valid statistical measures.
+#'   }
 #'
 #' @return A numeric value representing the overall balance score.
-#'   Higher values indicate better covariate balance.
+#'   For all combinations, HIGHER values indicate better covariate balance.
 #'
+#' @details
+#' The function transforms effect sizes as (1 - effect_size) so that lower effect
+#' sizes (better balance) produce higher scores, matching the direction of p-values.
+#' This ensures all metrics can be maximized by the optimization algorithm.
 #'
 #' @examples
-#' # Example with well-balanced covariates
+#' # Statistical significance with harmonic mean (default)
 #' p_vals <- c(0.8, 0.9, 0.85)
-#' calculate_balance_score(p_vals)
+#' calculate_balance_score(p_values = p_vals)
 #'
-#' # Example with poorly balanced covariates
-#' p_vals <- c(0.01, 0.02, 0.03)
-#' calculate_balance_score(p_vals)
+#' # Effect size with harmonic mean
+#' effects <- c(0.05, 0.03, 0.04)  # Small effect sizes = good balance
+#' calculate_balance_score(effect_sizes = effects, balance_type = "effect_size")
+#'
+#' # Statistical significance with product
+#' calculate_balance_score(p_values = p_vals, balance_metric = "product")
 #'
 #' # Handling NA values
 #' p_vals_with_na <- c(0.8, NA, 0.85)
-#' calculate_balance_score(p_vals_with_na, na.rm = TRUE)
+#' calculate_balance_score(p_values = p_vals_with_na, na.rm = TRUE)
 #'
 #' @export
 
-calculate_balance_score = function(p_values, na.rm = TRUE, balance_metric = "harmonic_mean"){
-  # remove NA values if present
-  if(na.rm){
-    p_values = p_values[!is.na(p_values)]
+calculate_balance_score = function(p_values = NULL,
+                                  effect_sizes = NULL,
+                                  na.rm = TRUE,
+                                  balance_metric = "harmonic_mean",
+                                  balance_type = "p_value") {
+
+  # Validate balance_type
+  if (!balance_type %in% c("p_value", "effect_size")) {
+    stop("balance_type must be 'p_value' or 'effect_size'")
   }
-  else if(any(is.na(p_values))){
+
+  # Select values based on balance_type
+  if (balance_type == "p_value") {
+    if (is.null(p_values)) {
+      stop("p_values required when balance_type = 'p_value'")
+    }
+    values <- p_values
+  } else if (balance_type == "effect_size") {
+    if (is.null(effect_sizes)) {
+      stop("effect_sizes required when balance_type = 'effect_size'")
+    }
+    # Transform: effect size 0 (perfect balance) → 1 (high score)
+    #            effect size 1 (maximum association) → 0 (low score)
+    values <- 1 - effect_sizes
+  }
+
+  # Remove NA values if requested
+  if (na.rm) {
+    values <- values[!is.na(values)]
+  } else if (any(is.na(values))) {
     return(NA)
   }
 
-  # harmonic mean
-  if(balance_metric == "harmonic_mean"){
-    harmonic_mean = 1 / mean(1/p_values)
-
+  # Validate balance_metric and calculate
+  if (balance_metric == "harmonic_mean") {
+    harmonic_mean <- 1 / mean(1/values)
     return(harmonic_mean)
-  }
-  # product
-  else if(balance_metric == "product"){
-    product = prod(p_values)
+  } else if (balance_metric == "product") {
+    product <- prod(values)
     return(product)
-    }
-  else{
-    stop("Invalid balance metric specified. Supported metrics: 'harmonic_mean', 'product'")
+  } else {
+    stop("balance_metric must be 'harmonic_mean' or 'product'")
   }
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------------------
-allocate_best_random <- function(data, batch_size, iterations, blocking_variable = NA, balance_metric = "harmonic_mean") {
+allocate_best_random <- function(data, batch_size, iterations, blocking_variable = NA, balance_metric = "harmonic_mean", balance_type = "p_value") {
 
   # Allocate the number of layouts specified by "iterations"
   many_layouts <- replicate(iterations,
@@ -438,7 +573,18 @@ allocate_best_random <- function(data, batch_size, iterations, blocking_variable
                             simplify = FALSE)
 
   # calculate balance score for each layout
-  balance_scores <- sapply(many_layouts, function(x) calculate_balance_score(x$results$p_value, balance_metric = balance_metric))
+  balance_scores <- sapply(many_layouts, function(x) {
+    if (balance_type == "effect_size") {
+      effect_results <- calculate_effect_sizes(x$layout, blocking_variable = blocking_variable)
+      calculate_balance_score(effect_sizes = effect_results$effect_size,
+                             balance_metric = balance_metric,
+                             balance_type = balance_type)
+    } else {
+      calculate_balance_score(p_values = x$results$p_value,
+                             balance_metric = balance_metric,
+                             balance_type = balance_type)
+    }
+  })
 
   # Return the layout with the highest balance score
   index_of_best = which.max(balance_scores)
@@ -447,7 +593,7 @@ allocate_best_random <- function(data, batch_size, iterations, blocking_variable
 
   best_layout_result <- many_layouts[[index_of_best]]$results
 
-  cat("Balance Score:", calculate_balance_score(best_layout_result$p_value, balance_metric = balance_metric), "\n")
+  cat("Balance Score:", balance_scores[index_of_best], "\n")
 
   # Return the layout
   return(list(layout = best_layout,
@@ -464,11 +610,21 @@ simulate_annealing <- function(data,
                                cooling_rate,
                                iterations,
                                plot = TRUE,
-                               balance_metric = "harmonic_mean") {
+                               balance_metric = "harmonic_mean",
+                               balance_type = "p_value") {
   # Step 1: Define the objective function to minimize the sum of p-values
   objective <- function(layout_inc_data, blocking_variable = blocking_variable) {
-    metrics <- test_covariates(layout_inc_data, blocking_variable = blocking_variable)
-    balance_score <- calculate_balance_score(metrics$p_value, balance_metric = balance_metric)
+    if (balance_type == "effect_size") {
+      metrics <- calculate_effect_sizes(layout_inc_data, blocking_variable = blocking_variable)
+      balance_score <- calculate_balance_score(effect_sizes = metrics$effect_size,
+                                               balance_metric = balance_metric,
+                                               balance_type = balance_type)
+    } else {
+      metrics <- test_covariates(layout_inc_data, blocking_variable = blocking_variable)
+      balance_score <- calculate_balance_score(p_values = metrics$p_value,
+                                               balance_metric = balance_metric,
+                                               balance_type = balance_type)
+    }
     return(balance_score)
   }
 
@@ -691,12 +847,22 @@ simulate_annealing_for_unequal_block_size <- function(data,
                                                       cooling_rate,
                                                       iterations,
                                                       plot = TRUE,
-                                                      balance_metric = "harmonic_mean") {
+                                                      balance_metric = "harmonic_mean",
+                                                      balance_type = "p_value") {
 
   # Step 1: Define the objective function to minimize the sum of p-values
   objective <- function(layout_inc_data, blocking_variable = blocking_variable) {
-    metrics <- test_covariates(layout_inc_data, blocking_variable = blocking_variable)
-    balance_score <- calculate_balance_score(metrics$p_value, balance_metric = balance_metric)
+    if (balance_type == "effect_size") {
+      metrics <- calculate_effect_sizes(layout_inc_data, blocking_variable = blocking_variable)
+      balance_score <- calculate_balance_score(effect_sizes = metrics$effect_size,
+                                               balance_metric = balance_metric,
+                                               balance_type = balance_type)
+    } else {
+      metrics <- test_covariates(layout_inc_data, blocking_variable = blocking_variable)
+      balance_score <- calculate_balance_score(p_values = metrics$p_value,
+                                               balance_metric = balance_metric,
+                                               balance_type = balance_type)
+    }
     return(balance_score)
   }
 
@@ -1245,7 +1411,31 @@ simulate_annealing_for_unequal_block_size <- function(data,
 #' @param plot_convergence = TRUE A logical indicating whether to plot the convergence of the optimisation process, only relevant if the method specified is "simulated_annealing". The default is `TRUE`.
 #' @param collapse_rare_factors = FALSE A logical indicating whether to collapse rare factor levels in the covariates. The default is `FALSE`. Factor levels that are present with counts either less than 5 or in 0.05*batch_size are collapsed into a single level "other".
 #'  Please note that the layout returned will contain these collapsed factor levels, rather than your original input data.
-#' @param balance_metric A character string specifying the metric to use for calculating the balance score. Valid options are "harmonic_mean" (default) and "product".
+#' @param balance_metric A character string specifying how to combine multiple
+#'   covariate metrics. Valid options are:
+#'   \itemize{
+#'     \item \code{"harmonic_mean"} (default): Non-compensatory combination.
+#'           Ensures all covariates must be balanced - no single well-balanced
+#'           covariate can compensate for a poorly balanced one. More sensitive
+#'           to the worst-balanced covariate.
+#'     \item \code{"product"}: Product of all metrics. Very sensitive to any
+#'           poorly balanced covariate. Can become numerically small with many covariates.
+#'   }
+#' @param balance_type A character string specifying what metric to calculate
+#'   for each covariate. Valid options are:
+#'   \itemize{
+#'     \item \code{"p_value"} (default): Uses p-values from statistical tests
+#'           (Kruskal-Wallis for continuous covariates, Fisher's exact test for
+#'           categorical covariates). Tests whether covariate distributions differ
+#'           significantly between batches. Higher p-values indicate better balance.
+#'     \item \code{"effect_size"}: Uses effect sizes measuring the magnitude of
+#'           association between covariates and batch assignment. Uses Cramér's V
+#'           for categorical covariates and eta (from ANOVA) for continuous covariates.
+#'           Effect sizes range from 0 (no association, perfect balance) to 1
+#'           (maximum association). Note: effect sizes are internally transformed
+#'           as (1 - effect_size) so that higher values indicate better balance,
+#'           consistent with p-values.
+#'   }
 #'
 #' @return An object containing the allocation layout of samples to batches, along with any specified blocking and covariate adjustments. The exact structure of the return value depends on the allocation method used.
 #'
@@ -1279,7 +1469,8 @@ allocate_samples <- function(data,
                              seed = 123,
                              plot_convergence = TRUE,
                              collapse_rare_factors = FALSE,
-                             balance_metric = "harmonic_mean") {
+                             balance_metric = "harmonic_mean",
+                             balance_type = "p_value") {
 
   # Valid input
   if (!is.data.frame(data)) {
@@ -1420,7 +1611,8 @@ allocate_samples <- function(data,
     output = allocate_best_random(data = data, batch_size = batch_size,
                                   blocking_variable = blocking_variable,
                                   iterations = iterations,
-                                  balance_metric = balance_metric)
+                                  balance_metric = balance_metric,
+                                  balance_type = balance_type)
   } else if (method == "simulated_annealing") {
     # Check if we need to use the approximate version for unequal block sizes
     use_approximate_for_unequal_block_size <- FALSE
@@ -1444,7 +1636,8 @@ allocate_samples <- function(data,
                                                           cooling_rate = cooling_rate,
                                                           iterations = iterations,
                                                           plot = plot_convergence,
-                                                          balance_metric = balance_metric)
+                                                          balance_metric = balance_metric,
+                                                          balance_type = balance_type)
     } else {
       # Use standard version for no blocking or equal block sizes
       output = simulate_annealing(data = data,
@@ -1454,7 +1647,8 @@ allocate_samples <- function(data,
                                   cooling_rate = cooling_rate,
                                   iterations = iterations,
                                   plot = plot_convergence,
-                                  balance_metric = balance_metric)
+                                  balance_metric = balance_metric,
+                                  balance_type = balance_type)
     }
   } else {
     stop("Invalid method specified")
