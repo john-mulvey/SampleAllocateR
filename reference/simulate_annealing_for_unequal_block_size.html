@@ -60,7 +60,8 @@ prevent the algorithm becoming stuck in local optima.</p>
 <span>  <span class="va">cooling_rate</span>,</span>
 <span>  <span class="va">iterations</span>,</span>
 <span>  plot <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  balance_metric <span class="op">=</span> <span class="st">"harmonic_mean"</span></span>
+<span>  balance_metric <span class="op">=</span> <span class="st">"harmonic_mean"</span>,</span>
+<span>  balance_type <span class="op">=</span> <span class="st">"p_value"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -98,7 +99,7 @@ If NA or missing, no blocking is applied.</p></dd>
 
 
 <dt id="arg-plot">plot<a class="anchor" aria-label="anchor" href="#arg-plot"></a></dt>
-<dd><p>Logical indicating whether to plot optimization progress. Default is TRUE.</p></dd>
+<dd><p>Logical indicating whether to plot optimisation progress. Default is TRUE.</p></dd>
 
 
 <dt id="arg-balance-metric">balance_metric<a class="anchor" aria-label="anchor" href="#arg-balance-metric"></a></dt>
@@ -109,7 +110,9 @@ If NA or missing, no blocking is applied.</p></dd>
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A list with three elements:</p><ul><li><p>layout: data.frame with batch_allocation column added (may include padding rows)</p></li>
 <li><p>results: data.frame with covariate balance test results</p></li>
-<li><p>optimisation_data: data.frame tracking the optimization process across iterations</p></li>
+<li><p>optimisation_data: data.frame tracking the optimisation process across iterations
+(iteration, temperature, objective_value). Diagnostic columns for swap mechanics
+are available in the code but commented out by default.</p></li>
 </ul></div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -137,7 +140,7 @@ diversity across batches.</p>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.3.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
 </div>
 
     </footer></div>

@@ -55,7 +55,8 @@
 <span>  seed <span class="op">=</span> <span class="fl">123</span>,</span>
 <span>  plot_convergence <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  collapse_rare_factors <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  balance_metric <span class="op">=</span> <span class="st">"harmonic_mean"</span></span>
+<span>  balance_metric <span class="op">=</span> <span class="st">"harmonic_mean"</span>,</span>
+<span>  balance_type <span class="op">=</span> <span class="st">"p_value"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -113,13 +114,45 @@ Please note that the layout returned will contain these collapsed factor levels,
 
 
 <dt id="arg-balance-metric">balance_metric<a class="anchor" aria-label="anchor" href="#arg-balance-metric"></a></dt>
-<dd><p>A character string specifying the metric to use for calculating the balance score. Valid options are "harmonic_mean" (default) and "product".</p></dd>
+<dd><p>A character string specifying how to combine multiple
+covariate metrics. Valid options are:</p><ul><li><p><code>"harmonic_mean"</code> (default): Non-compensatory combination.
+Ensures all covariates must be balanced - no single well-balanced
+covariate can compensate for a poorly balanced one. More sensitive
+to the worst-balanced covariate.</p></li>
+<li><p><code>"product"</code>: Product of all metrics. Very sensitive to any
+poorly balanced covariate. Can become numerically small with many covariates.</p></li>
+</ul></dd>
+
+
+<dt id="arg-balance-type">balance_type<a class="anchor" aria-label="anchor" href="#arg-balance-type"></a></dt>
+<dd><p>A character string specifying what metric to calculate
+for each covariate. Valid options are:</p><ul><li><p><code>"p_value"</code> (default): Uses p-values from statistical tests
+(Kruskal-Wallis for continuous covariates, Fisher's exact test for
+categorical covariates). Tests whether covariate distributions differ
+significantly between batches. Higher p-values indicate better balance.</p></li>
+<li><p><code>"effect_size"</code>: Uses effect sizes measuring the magnitude of
+association between covariates and batch assignment. Uses Cramér's V
+for categorical covariates and eta (from ANOVA) for continuous covariates.
+Effect sizes range from 0 (no association, perfect balance) to 1
+(maximum association). Note: effect sizes are internally transformed
+as (1 - effect_size) so that higher values indicate better balance,
+consistent with p-values.</p></li>
+</ul></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>An object containing the allocation layout of samples to batches, along with any specified blocking and covariate adjustments. The exact structure of the return value depends on the allocation method used.</p>
-    </div>
+    <p>A named list with elements:</p><dl><dt>layout</dt>
+<dd><p>Data frame with original data plus <code>batch_allocation</code> column</p></dd>
+
+<dt>results</dt>
+<dd><p>Data frame with covariate balance metrics (<code>covariate</code>, <code>p_value</code>, <code>effect_size</code>)</p></dd>
+
+<dt>optimisation_data</dt>
+<dd><p>(Only for iterative methods) Data frame with <code>iteration</code>, <code>temperature</code>, <code>objective_value</code></p></dd>
+
+
+</dl></div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p>The function first checks the validity of the specified method and parameters, then preprocesses the data according to the specified covariates and blocking variable. It applies the specified allocation method to assign samples to batches, aiming to balance the distribution of covariates and, if applicable, blocking levels across batches.</p>
@@ -156,7 +189,7 @@ Please note that the layout returned will contain these collapsed factor levels,
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.1.3.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
 </div>
 
     </footer></div>
