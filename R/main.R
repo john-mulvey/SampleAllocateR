@@ -1549,8 +1549,14 @@ allocate_samples <- function(data,
   }
 
   # function body
+  # validate id_column before renaming
+  if (!id_column %in% names(data)) {
+    stop("id_column is not a valid column name in the data.")
+  }
+
   # rename id_column
   names(data)[names(data) == id_column] <- "sample_id"
+  data$sample_id <- as.character(data$sample_id)
 
   # Check if covariates and are valid column names
   data_columns <- names(data)
@@ -1568,9 +1574,6 @@ allocate_samples <- function(data,
     }
     if (!blocking_variable %in% data_columns) {
       stop("Blocking variable is not a valid column name in the data.")
-    }
-    if (!id_column %in% data_columns) {
-      stop("id_column is not a valid column name in the data.")
     }
   }
 
@@ -1740,6 +1743,7 @@ allocate_samples <- function(data,
 #' @import ggplot2
 #' @import dplyr
 #' @import tidyr
+#' @importFrom rlang .data
 #' @export
 
 plot_layout <- function(output, id_column = "sample_id", covariates = NULL) {
@@ -1784,7 +1788,7 @@ plot_layout <- function(output, id_column = "sample_id", covariates = NULL) {
   # continuous covariates
   if(length(continuous_vars) > 0) {
     continuous_plot = layout %>%
-      dplyr::filter(!grepl("padding", sample_id)) %>%
+      dplyr::filter(!grepl("padding", .data[[id_column]])) %>%
       dplyr::select(where(is.numeric) | {{id_column}}, batch_allocation) %>%
       tidyr::pivot_longer(cols = !c({{id_column}}, batch_allocation), names_to = "covariate", values_to = "value") %>%
       ggplot2::ggplot(ggplot2::aes(x = batch_allocation, y = value)) +
@@ -1798,7 +1802,7 @@ plot_layout <- function(output, id_column = "sample_id", covariates = NULL) {
   # categorical covariates
   if(length(categorical_vars) > 0) {
     categorical_plot = layout %>%
-      dplyr::filter(!grepl("padding", sample_id)) %>%
+      dplyr::filter(!grepl("padding", .data[[id_column]])) %>%
       dplyr::select(where(is.factor) | {{id_column}}, batch_allocation) %>%
       tidyr::pivot_longer(cols = !c({{id_column}}, batch_allocation), names_to = "covariate", values_to = "value") %>%
       droplevels() %>%
