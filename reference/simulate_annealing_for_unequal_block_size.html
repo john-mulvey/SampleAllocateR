@@ -61,7 +61,8 @@ prevent the algorithm becoming stuck in local optima.</p>
 <span>  <span class="va">iterations</span>,</span>
 <span>  plot <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  balance_metric <span class="op">=</span> <span class="st">"harmonic_mean"</span>,</span>
-<span>  balance_type <span class="op">=</span> <span class="st">"p_value"</span></span>
+<span>  balance_type <span class="op">=</span> <span class="st">"p_value"</span>,</span>
+<span>  initial_layout <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -104,6 +105,16 @@ If NA or missing, no blocking is applied.</p></dd>
 
 <dt id="arg-balance-metric">balance_metric<a class="anchor" aria-label="anchor" href="#arg-balance-metric"></a></dt>
 <dd><p>Character string specifying the metric to use ("harmonic_mean" or "product").</p></dd>
+
+
+<dt id="arg-balance-type">balance_type<a class="anchor" aria-label="anchor" href="#arg-balance-type"></a></dt>
+<dd><p>A character string specifying what metric to calculate.
+Options are "p_value" (default) or "effect_size".</p></dd>
+
+
+<dt id="arg-initial-layout">initial_layout<a class="anchor" aria-label="anchor" href="#arg-initial-layout"></a></dt>
+<dd><p>Optional data.frame providing a pre-computed initial
+layout to use instead of generating a random one. Default is NULL.</p></dd>
 
 </dl></div>
     <div class="section level2">

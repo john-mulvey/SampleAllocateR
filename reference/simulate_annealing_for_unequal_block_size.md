@@ -20,7 +20,8 @@ simulate_annealing_for_unequal_block_size(
   iterations,
   plot = TRUE,
   balance_metric = "harmonic_mean",
-  balance_type = "p_value"
+  balance_type = "p_value",
+  initial_layout = NULL
 )
 ```
 
@@ -66,6 +67,16 @@ simulate_annealing_for_unequal_block_size(
 
   Character string specifying the metric to use ("harmonic_mean" or
   "product").
+
+- balance_type:
+
+  A character string specifying what metric to calculate. Options are
+  "p_value" (default) or "effect_size".
+
+- initial_layout:
+
+  Optional data.frame providing a pre-computed initial layout to use
+  instead of generating a random one. Default is NULL.
 
 ## Value
 
