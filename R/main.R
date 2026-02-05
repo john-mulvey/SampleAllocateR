@@ -1,8 +1,11 @@
 ## ---------------------------------------------------------------------------------------------------------------------------------
 # prevent R CMD check warning about missing visible binding for global varaiables (due to non-standard evaluation by dplyr)
 utils::globalVariables(c(
-  "Temperature", "Value", "Variable", "adj_p_value", "batch", "batch_allocation", "covariate", "balance_score", "effect_size", "objective_value",
-  "p_value", "sample_id", "value"
+  "Temperature", "Value", "Variable", "adj_p_value", "age_at_baseline",
+  "batch", "batch_allocation", "bmi_at_baseline", "covariate",
+  "balance_score", "effect_size", "objective_value", "p_value",
+  "sample_id", "sample_timepoint", "sex", "subject_id", "treatment",
+  "value"
 ))
 
 ## ---------------------------------------------------------------------------------------------------------------------------------
@@ -176,7 +179,14 @@ test_covariates = function(layout, blocking_variable = "block_id"){
     test_results <- dplyr::bind_rows(test_results, test_results_factor)
   }
 
-  return(test_results)
+  # Calculate effect sizes for all covariates
+  effect_results <- calculate_effect_sizes(layout, blocking_variable = blocking_variable)
+
+  # Combine p-values and effect sizes
+  combined_results <- test_results %>%
+    dplyr::left_join(effect_results, by = "covariate")
+
+  return(combined_results)
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------------------
@@ -221,11 +231,15 @@ calculate_effect_sizes <- function(layout, blocking_variable = "block_id") {
           NA  # Not enough data
         } else {
           # Calculate eta-squared (proportion of variance explained by batch)
-          fit <- stats::aov(value[valid_data] ~ batch[valid_data])
           ss_total <- sum((value[valid_data] - mean(value[valid_data]))^2)
-          ss_between <- stats::anova(fit)[1, "Sum Sq"]
-          eta_squared <- ss_between / ss_total
-          sqrt(eta_squared)  # Return eta (not eta-squared) to match correlation scale
+          if (ss_total == 0) {
+            0  # Constant covariate - no association possible
+          } else {
+            fit <- stats::aov(value[valid_data] ~ batch[valid_data])
+            ss_between <- stats::anova(fit)[1, "Sum Sq"]
+            eta_squared <- ss_between / ss_total
+            sqrt(eta_squared)  # Return eta (not eta-squared) to match correlation scale
+          }
         }
       })
 
@@ -253,11 +267,15 @@ calculate_effect_sizes <- function(layout, blocking_variable = "block_id") {
           # NOT the buggy Omixer formula: sqrt(χ² / (n × min(k,r) - 1))
           # Note: We only use the chi-squared statistic, not the p-value,
           # so warnings about p-value approximation can be safely suppressed
-          chi_stat <- stats::chisq.test(contingency_table, correct = FALSE)$statistic
-          n <- sum(contingency_table)
           k <- nrow(contingency_table)
           r <- ncol(contingency_table)
-          sqrt(chi_stat / (n * (min(k, r) - 1)))
+          if (min(k, r) <= 1) {
+            0  # Single-level factor - no association possible
+          } else {
+            chi_stat <- stats::chisq.test(contingency_table, correct = FALSE)$statistic
+            n <- sum(contingency_table)
+            sqrt(chi_stat / (n * (min(k, r) - 1)))
+          }
         }
       }))
 
@@ -497,7 +515,7 @@ allocate_single_random <- function(data, batch_size, blocking_variable = NA) {
 #' @details
 #' The function transforms effect sizes as (1 - effect_size) so that lower effect
 #' sizes (better balance) produce higher scores, matching the direction of p-values.
-#' This ensures all metrics can be maximized by the optimization algorithm.
+#' This ensures all metrics can be maximised by the optimisation algorithm.
 #'
 #' @examples
 #' # Statistical significance with harmonic mean (default)
@@ -611,7 +629,8 @@ simulate_annealing <- function(data,
                                iterations,
                                plot = TRUE,
                                balance_metric = "harmonic_mean",
-                               balance_type = "p_value") {
+                               balance_type = "p_value",
+                               initial_layout = NULL) {
   # Step 1: Define the objective function to minimize the sum of p-values
   objective <- function(layout_inc_data, blocking_variable = blocking_variable) {
     if (balance_type == "effect_size") {
@@ -630,10 +649,11 @@ simulate_annealing <- function(data,
 
   # Step 2: simulate annealing
   # inital conditions
-  if(is.na(blocking_variable)){
+  if (!is.null(initial_layout)) {
+    current_arrangement <- initial_layout
+  } else if(is.na(blocking_variable)){
     current_arrangement <- allocate_single_random(data, batch_size)$layout
-  }
-  else{
+  } else{
     current_arrangement <- allocate_single_random(data, batch_size, blocking_variable = blocking_variable)$layout
 
     # block_size = table(current_arrangement[[blocking_variable]])[[1]]
@@ -691,7 +711,7 @@ simulate_annealing <- function(data,
   # define a vectors to store values over time
   optimisation_data <- data.frame(iteration = numeric(iterations),
                                   temperature = numeric(iterations),
-                                    objective_value = numeric(iterations))
+                                  objective_value = numeric(iterations))
 
   # run algorithm
   for (iteration in 1:iterations) {
@@ -807,13 +827,19 @@ simulate_annealing <- function(data,
 #' @param temperature Numeric specifying the initial temperature for the annealing process.
 #' @param cooling_rate Numeric between 0 and 1 specifying the rate at which temperature decreases.
 #' @param iterations Integer specifying the number of iterations to run.
-#' @param plot Logical indicating whether to plot optimization progress. Default is TRUE.
+#' @param plot Logical indicating whether to plot optimisation progress. Default is TRUE.
 #' @param balance_metric Character string specifying the metric to use ("harmonic_mean" or "product").
+#' @param balance_type A character string specifying what metric to calculate.
+#'   Options are "p_value" (default) or "effect_size".
+#' @param initial_layout Optional data.frame providing a pre-computed initial
+#'   layout to use instead of generating a random one. Default is NULL.
 #'
 #' @return A list with three elements:
 #'   - layout: data.frame with batch_allocation column added (may include padding rows)
 #'   - results: data.frame with covariate balance test results
-#'   - optimisation_data: data.frame tracking the optimization process across iterations
+#'   - optimisation_data: data.frame tracking the optimisation process across iterations
+#'     (iteration, temperature, objective_value). Diagnostic columns for swap mechanics
+#'     are available in the code but commented out by default.
 #'
 #' @details
 #' This function addresses the complex problem of optimizing batch allocation when blocks
@@ -848,7 +874,8 @@ simulate_annealing_for_unequal_block_size <- function(data,
                                                       iterations,
                                                       plot = TRUE,
                                                       balance_metric = "harmonic_mean",
-                                                      balance_type = "p_value") {
+                                                      balance_type = "p_value",
+                                                      initial_layout = NULL) {
 
   # Step 1: Define the objective function to minimize the sum of p-values
   objective <- function(layout_inc_data, blocking_variable = blocking_variable) {
@@ -867,7 +894,9 @@ simulate_annealing_for_unequal_block_size <- function(data,
   }
 
   # Step 2: Initial conditions
-  if(is.na(blocking_variable)){
+  if (!is.null(initial_layout)) {
+    current_arrangement <- initial_layout
+  } else if(is.na(blocking_variable)){
     current_arrangement <- allocate_single_random(data, batch_size)$layout
   } else{
     current_arrangement <- allocate_single_random(data, batch_size, blocking_variable = blocking_variable)$layout
@@ -880,18 +909,18 @@ simulate_annealing_for_unequal_block_size <- function(data,
   optimisation_data <- data.frame(
     iteration = rep(NA_integer_, iterations),
     temperature = rep(NA_real_, iterations),
-    objective_value = rep(NA_real_, iterations),
-    batch_a = rep(NA_real_, iterations),
-    batch_b = rep(NA_real_, iterations),
-    batch_a_block_id = rep(NA_character_, iterations),
-    batch_a_block_id_2 = rep(NA_character_, iterations),
-    swap_possible = rep(NA, iterations),
-    batch_b_block_id = rep(NA_character_, iterations),
-    batch_b_block_id_2 = rep(NA_character_, iterations),
-    padding_samples_used = rep(NA_integer_, iterations),
-    padding_sample_ids = rep(NA_character_, iterations),
-    padding_added_to = rep(NA_character_, iterations),
-    swap_size = rep(NA_integer_, iterations)
+    objective_value = rep(NA_real_, iterations)
+    # batch_a = rep(NA_real_, iterations),
+    # batch_b = rep(NA_real_, iterations),
+    # batch_a_block_id = rep(NA_character_, iterations),
+    # batch_a_block_id_2 = rep(NA_character_, iterations),
+    # swap_possible = rep(NA, iterations),
+    # batch_b_block_id = rep(NA_character_, iterations),
+    # batch_b_block_id_2 = rep(NA_character_, iterations),
+    # padding_samples_used = rep(NA_integer_, iterations),
+    # padding_sample_ids = rep(NA_character_, iterations),
+    # padding_added_to = rep(NA_character_, iterations),
+    # swap_size = rep(NA_integer_, iterations)
   )
 
   # Check if all blocks have equal sizes (for blocking logic)
@@ -910,8 +939,10 @@ simulate_annealing_for_unequal_block_size <- function(data,
     optimisation_data$iteration[iteration] <- iteration
     optimisation_data$temperature[iteration] <- temperature
     optimisation_data$objective_value[iteration] <- current_value
-    optimisation_data$batch_a[iteration] <- batch_a <- sample(1:n_batches, 1)
-    optimisation_data$batch_b[iteration] <- batch_b <- sample(setdiff(1:n_batches, batch_a), 1)
+    batch_a <- sample(1:n_batches, 1)
+    batch_b <- sample(setdiff(1:n_batches, batch_a), 1)
+    # optimisation_data$batch_a[iteration] <- batch_a
+    # optimisation_data$batch_b[iteration] <- batch_b
 
     # Situation 1: no blocking variable
     if (missing(blocking_variable) || is.na(blocking_variable) || blocking_variable == "") {
@@ -927,8 +958,8 @@ simulate_annealing_for_unequal_block_size <- function(data,
       neighbor_arrangement$batch_allocation[batch_a_chosen_sample] <- batch_b
       neighbor_arrangement$batch_allocation[batch_b_chosen_sample] <- batch_a
 
-      optimisation_data$swap_possible[iteration] <- TRUE
-      optimisation_data$swap_size[iteration] <- 1
+      # optimisation_data$swap_possible[iteration] <- TRUE
+      # optimisation_data$swap_size[iteration] <- 1
     }
 
     # Situation 2: blocking with equal block size
@@ -951,10 +982,10 @@ simulate_annealing_for_unequal_block_size <- function(data,
       neighbor_arrangement$batch_allocation[batch_a_block_samples] <- batch_b
       neighbor_arrangement$batch_allocation[batch_b_block_samples] <- batch_a
 
-      optimisation_data$batch_a_block_id[iteration] <- as.character(batch_a_block_id)
-      optimisation_data$batch_b_block_id[iteration] <- as.character(batch_b_block_id)
-      optimisation_data$swap_possible[iteration] <- TRUE
-      optimisation_data$swap_size[iteration] <- length(batch_a_block_samples)
+      # optimisation_data$batch_a_block_id[iteration] <- as.character(batch_a_block_id)
+      # optimisation_data$batch_b_block_id[iteration] <- as.character(batch_b_block_id)
+      # optimisation_data$swap_possible[iteration] <- TRUE
+      # optimisation_data$swap_size[iteration] <- length(batch_a_block_samples)
     }
 
     # Situation 3: blocking with unequal block size (EXPERIMENTAL ENHANCEMENT)
@@ -1280,7 +1311,7 @@ simulate_annealing_for_unequal_block_size <- function(data,
       # Execute swap
       if (nrow(possible_swaps) == 0) {
         neighbor_arrangement <- current_arrangement
-        optimisation_data$swap_possible[iteration] <- FALSE
+        # optimisation_data$swap_possible[iteration] <- FALSE
       } else {
         # Randomly select one of the possible swaps
         selected_swap <- possible_swaps[sample(1:nrow(possible_swaps), 1), ]
@@ -1329,19 +1360,19 @@ simulate_annealing_for_unequal_block_size <- function(data,
         neighbor_arrangement$batch_allocation[batch_b_rows] <- batch_a
 
         # Record swap details in optimisation_data
-        optimisation_data$batch_a_block_id[iteration] <- selected_swap$batch_a_block_id
-        optimisation_data$batch_a_block_id_2[iteration] <- ifelse(is.na(selected_swap$batch_a_block_id_2), NA, selected_swap$batch_a_block_id_2)
-        optimisation_data$batch_b_block_id[iteration] <- selected_swap$batch_b_block_id
-        optimisation_data$batch_b_block_id_2[iteration] <- ifelse(is.na(selected_swap$batch_b_block_id_2), NA, selected_swap$batch_b_block_id_2)
-        optimisation_data$padding_samples_used[iteration] <- selected_swap$padding_samples_used
-        optimisation_data$padding_added_to[iteration] <- selected_swap$padding_added_to
-        optimisation_data$swap_size[iteration] <- selected_swap$total_size
-        optimisation_data$swap_possible[iteration] <- TRUE
+        # optimisation_data$batch_a_block_id[iteration] <- selected_swap$batch_a_block_id
+        # optimisation_data$batch_a_block_id_2[iteration] <- ifelse(is.na(selected_swap$batch_a_block_id_2), NA, selected_swap$batch_a_block_id_2)
+        # optimisation_data$batch_b_block_id[iteration] <- selected_swap$batch_b_block_id
+        # optimisation_data$batch_b_block_id_2[iteration] <- ifelse(is.na(selected_swap$batch_b_block_id_2), NA, selected_swap$batch_b_block_id_2)
+        # optimisation_data$padding_samples_used[iteration] <- selected_swap$padding_samples_used
+        # optimisation_data$padding_added_to[iteration] <- selected_swap$padding_added_to
+        # optimisation_data$swap_size[iteration] <- selected_swap$total_size
+        # optimisation_data$swap_possible[iteration] <- TRUE
 
         # Store the actual padding sample IDs that were moved
-        if (selected_swap$padding_samples_used > 0) {
-          optimisation_data$padding_sample_ids[iteration] <- paste(padding_sample_ids_to_move, collapse = ",")
-        }
+        # if (selected_swap$padding_samples_used > 0) {
+        #   optimisation_data$padding_sample_ids[iteration] <- paste(padding_sample_ids_to_move, collapse = ",")
+        # }
       }
     }
 
@@ -1437,7 +1468,12 @@ simulate_annealing_for_unequal_block_size <- function(data,
 #'           consistent with p-values.
 #'   }
 #'
-#' @return An object containing the allocation layout of samples to batches, along with any specified blocking and covariate adjustments. The exact structure of the return value depends on the allocation method used.
+#' @return A named list with elements:
+#' \describe{
+#'   \item{layout}{Data frame with original data plus \code{batch_allocation} column}
+#'   \item{results}{Data frame with covariate balance metrics (\code{covariate}, \code{p_value}, \code{effect_size})}
+#'   \item{optimisation_data}{(Only for iterative methods) Data frame with \code{iteration}, \code{temperature}, \code{objective_value}}
+#' }
 #'
 #' @details
 #' The function first checks the validity of the specified method and parameters, then preprocesses the data according to the specified covariates and blocking variable. It applies the specified allocation method to assign samples to batches, aiming to balance the distribution of covariates and, if applicable, blocking levels across batches.

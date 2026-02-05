@@ -75,7 +75,12 @@ consistent with p-values.
 }}
 }
 \value{
-An object containing the allocation layout of samples to batches, along with any specified blocking and covariate adjustments. The exact structure of the return value depends on the allocation method used.
+A named list with elements:
+\describe{
+\item{layout}{Data frame with original data plus \code{batch_allocation} column}
+\item{results}{Data frame with covariate balance metrics (\code{covariate}, \code{p_value}, \code{effect_size})}
+\item{optimisation_data}{(Only for iterative methods) Data frame with \code{iteration}, \code{temperature}, \code{objective_value}}
+}
 }
 \description{
 This function allocates samples to batches based on the specified method, which can be random allocation, best random allocation, or simulated annealing. It supports optional blocking and handles various types of covariates.

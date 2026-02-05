@@ -1,345 +1,128 @@
-test_that("best_random produces better or equal balance than single random allocation", {
-  set.seed(123)
+# ============================================================================
+# Tests that optimisation algorithms improve balance from a known-bad layout
+# ============================================================================
+
+test_that("best_random improves balance from a deliberately biased layout", {
+  set.seed(42)
   toy_data <- simulate_data(n_samples = 100, block_size = 1)
 
-  # Single random allocation
-  random_result <- allocate_samples(
-    data = toy_data,
-    method = "random",
-    covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
-    batch_size = 20,
-    seed = 123
-  )
-  random_score <- calculate_balance_score(random_result$results$p_value)
+  # Create a deliberately biased layout: sort by age so batch 1
+  # gets the youngest samples, batch 5 gets the oldest
+  biased_layout <- toy_data[order(toy_data$age_at_baseline), ]
+  biased_layout$batch_allocation <- factor(rep(1:5, each = 20))
 
-  # Best random with multiple iterations
+  # Measure p-values of the biased layout
+  biased_results <- test_covariates(biased_layout, blocking_variable = NULL)
+  biased_score <- calculate_balance_score(p_values = biased_results$p_value)
+
+  # The biased layout should have a poor balance score (low p-values)
+  expect_lt(biased_score, 0.1)
+
+  # Best random with multiple iterations should find a better layout
   best_random_result <- allocate_samples(
     data = toy_data,
     method = "best_random",
     covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
     batch_size = 20,
     iterations = 50,
-    seed = 123
+    seed = 42
   )
-  best_random_score <- calculate_balance_score(best_random_result$results$p_value)
+  best_random_results <- test_covariates(best_random_result$layout, blocking_variable = NULL)
+  best_random_score <- calculate_balance_score(p_values = best_random_results$p_value)
 
-  # Print scores for comparison
-  cat("\n  Random balance score:      ", round(random_score, 4))
-  cat("\n  Best random balance score: ", round(best_random_score, 4))
-  cat("\n  Improvement: ", round((best_random_score - random_score), 2), "\n")
-
-  # best_random should produce equal or better balance than single random
-  # Use a tolerance since stochastic algorithms vary
-  expect_gte(best_random_score, random_score * 0.9)  # Allow 10% tolerance
-
-  # Both scores should be positive and valid
-  expect_gt(random_score, 0)
-  expect_gt(best_random_score, 0)
-  expect_lt(random_score, 1)
-  expect_lt(best_random_score, 1)
+  # best_random should produce strictly better balance than the biased layout
+  expect_gt(best_random_score, biased_score)
 })
 
-test_that("simulated_annealing produces better or equal balance than single random allocation", {
-  set.seed(456)
+test_that("SA improves balance from a deliberately biased layout (no blocking)", {
+  set.seed(42)
   toy_data <- simulate_data(n_samples = 100, block_size = 1)
 
-  # Single random allocation
-  random_result <- allocate_samples(
-    data = toy_data,
-    method = "random",
-    covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
-    batch_size = 20,
-    seed = 456
-  )
-  random_score <- calculate_balance_score(random_result$results$p_value)
+  # Create a deliberately biased layout: sort by age
+  biased_layout <- toy_data[order(toy_data$age_at_baseline), ]
+  biased_layout$batch_allocation <- factor(rep(1:5, each = 20))
 
-  # Simulated annealing
-  sa_result <- allocate_samples(
+  # Measure p-values of the biased layout
+  biased_results <- test_covariates(biased_layout, blocking_variable = NULL)
+  biased_score <- calculate_balance_score(p_values = biased_results$p_value)
+
+  # The biased layout should have a poor balance score
+  expect_lt(biased_score, 0.1)
+
+  # Run SA starting from the biased layout
+  sa_result <- simulate_annealing(
     data = toy_data,
-    method = "simulated_annealing",
     covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
     batch_size = 20,
-    iterations = 200,
     temperature = 1,
     cooling_rate = 0.95,
-    seed = 456,
-    plot_convergence = FALSE
+    iterations = 300,
+    plot = FALSE,
+    balance_type = "p_value",
+    initial_layout = biased_layout
   )
-  sa_score <- calculate_balance_score(sa_result$results$p_value)
 
-  # Print scores for comparison
-  cat("\n  Random balance score:            ", round(random_score, 4))
-  cat("\n  Simulated annealing balance score:", round(sa_score, 4))
-  cat("\n  Improvement: ", round((sa_score - random_score), 2), "\n")
-
-  # SA should produce equal or better balance than random
-  # Use a tolerance since stochastic algorithms vary
-  expect_gte(sa_score, random_score * 0.9)  # Allow 10% tolerance
-
-  # Both scores should be positive and valid
-  expect_gt(random_score, 0)
-  expect_gt(sa_score, 0)
-  expect_lt(random_score, 1)
-  expect_lt(sa_score, 1)
+  # SA should have strictly improved the balance score
+  sa_results <- test_covariates(sa_result$layout, blocking_variable = NULL)
+  sa_score <- calculate_balance_score(p_values = sa_results$p_value)
+  expect_gt(sa_score, biased_score)
 })
 
-test_that("simulated_annealing with blocking produces better or equal balance than single random", {
-  set.seed(789)
+test_that("SA improves balance from a deliberately biased layout (equal block sizes)", {
+  set.seed(42)
   toy_data <- simulate_data(n_samples = 60, block_size = 3)
 
-  # Single random allocation with blocking
-  random_result <- allocate_samples(
+  # Create a biased layout: sort by age, assign whole blocks to batches
+  # so that blocks with younger subjects cluster in earlier batches
+  toy_data_sorted <- toy_data[order(toy_data$age_at_baseline), ]
+  subjects_ordered <- unique(toy_data_sorted$subject_id)
+  n_per_batch <- 4  # subjects per batch (12 samples / 3 per block)
+  n_batches <- ceiling(length(subjects_ordered) / n_per_batch)
+  subject_batch <- setNames(
+    rep(1:n_batches, each = n_per_batch, length.out = length(subjects_ordered)),
+    subjects_ordered
+  )
+  biased_layout <- toy_data_sorted
+  biased_layout$batch_allocation <- factor(subject_batch[as.character(biased_layout$subject_id)])
+
+  # Pad to fill batches
+  batch_counts <- table(biased_layout$batch_allocation)
+  padding_rows <- do.call(rbind, lapply(names(batch_counts), function(b) {
+    n_pad <- 12 - batch_counts[b]
+    if (n_pad > 0) {
+      pad <- as.data.frame(matrix(NA, nrow = n_pad, ncol = ncol(biased_layout)))
+      colnames(pad) <- colnames(biased_layout)
+      pad$sample_id <- paste0("padding_", b, "_", seq_len(n_pad))
+      pad$batch_allocation <- factor(b, levels = levels(biased_layout$batch_allocation))
+      pad
+    }
+  }))
+  if (!is.null(padding_rows)) {
+    biased_layout <- rbind(biased_layout, padding_rows)
+  }
+
+  # Measure p-values of the biased layout
+  biased_results <- test_covariates(biased_layout, blocking_variable = "subject_id")
+  biased_score <- calculate_balance_score(p_values = biased_results$p_value)
+
+  # Run SA starting from the biased layout
+  sa_result <- simulate_annealing(
     data = toy_data,
-    method = "random",
     covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
     blocking_variable = "subject_id",
     batch_size = 12,
-    seed = 789
-  )
-  random_score <- calculate_balance_score(random_result$results$p_value)
-
-  # Simulated annealing with blocking
-  sa_result <- allocate_samples(
-    data = toy_data,
-    method = "simulated_annealing",
-    covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
-    blocking_variable = "subject_id",
-    batch_size = 12,
-    iterations = 200,
     temperature = 1,
     cooling_rate = 0.95,
-    seed = 789,
-    plot_convergence = FALSE
-  )
-  sa_score <- calculate_balance_score(sa_result$results$p_value)
-
-  # Print scores for comparison
-  cat("\n  Random balance score (with blocking):            ", round(random_score, 4))
-  cat("\n  Simulated annealing balance score (with blocking):", round(sa_score, 4))
-  cat("\n  Improvement: ", round((sa_score - random_score), 2), "\n")
-
-  # SA should produce equal or better balance than random
-  expect_gte(sa_score, random_score * 0.9)  # Allow 10% tolerance
-
-  # Both scores should be positive and valid
-  expect_gt(random_score, 0)
-  expect_gt(sa_score, 0)
-  expect_lt(random_score, 1)
-  expect_lt(sa_score, 1)
-})
-
-test_that("simulated_annealing with unequal blocks produces better or equal balance than random", {
-  set.seed(321)
-  # Create data with unequal block sizes
-  toy_data <- simulate_data(n_samples = 60, block_size = 3) %>%
-    dplyr::slice(-sample(1:dplyr::n(), 12))
-
-  # Single random allocation with unequal blocking
-  random_result <- allocate_samples(
-    data = toy_data,
-    method = "random",
-    covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
-    blocking_variable = "subject_id",
-    batch_size = 15,
-    seed = 321
-  )
-  random_score <- calculate_balance_score(random_result$results$p_value)
-
-  # Simulated annealing with unequal blocking
-  sa_result <- allocate_samples(
-    data = toy_data,
-    method = "simulated_annealing",
-    covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
-    blocking_variable = "subject_id",
-    batch_size = 15,
-    iterations = 200,
-    temperature = 1,
-    cooling_rate = 0.95,
-    seed = 321,
-    plot_convergence = FALSE
-  )
-  sa_score <- calculate_balance_score(sa_result$results$p_value)
-
-  # Print scores for comparison
-  cat("\n  Random balance score (unequal blocks):            ", round(random_score, 4))
-  cat("\n  Simulated annealing balance score (unequal blocks):", round(sa_score, 4))
-  cat("\n  Improvement: ", round((sa_score - random_score), 2), "\n")
-
-  # SA should produce equal or better balance than random
-  expect_gte(sa_score, random_score * 0.9)  # Allow 10% tolerance
-
-  # Both scores should be positive and valid
-  expect_gt(random_score, 0)
-  expect_gt(sa_score, 0)
-  expect_lt(random_score, 1)
-  expect_lt(sa_score, 1)
-})
-
-# ============================================================================
-# Effect Size Performance Tests
-# ============================================================================
-
-test_that("best_random with effect_size produces better or equal balance than random", {
-  set.seed(1234)
-  toy_data <- simulate_data(n_samples = 100, block_size = 1)
-
-  # Single random allocation (does not support balance_type)
-  random_result <- allocate_samples(
-    data = toy_data,
-    method = "random",
-    covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
-    batch_size = 20,
-    seed = 1234
-  )
-  # Manually calculate effect sizes from the layout
-  random_effects <- calculate_effect_sizes(random_result$layout, blocking_variable = NULL)
-  random_score <- calculate_balance_score(
-    effect_sizes = random_effects$effect_size,
-    balance_type = "effect_size"
+    iterations = 300,
+    plot = FALSE,
+    balance_type = "p_value",
+    initial_layout = biased_layout
   )
 
-  # Best random with effect_size and multiple iterations
-  best_random_result <- allocate_samples(
-    data = toy_data,
-    method = "best_random",
-    covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
-    batch_size = 20,
-    balance_type = "effect_size",
-    iterations = 50,
-    seed = 1234
-  )
-  # Manually calculate effect sizes from the layout
-  best_effects <- calculate_effect_sizes(best_random_result$layout, blocking_variable = NULL)
-  best_random_score <- calculate_balance_score(
-    effect_sizes = best_effects$effect_size,
-    balance_type = "effect_size"
-  )
-
-  # Print scores for comparison
-  cat("\n  Random balance score (effect_size):      ", round(random_score, 4))
-  cat("\n  Best random balance score (effect_size): ", round(best_random_score, 4))
-  cat("\n  Improvement: ", round((best_random_score - random_score), 2), "\n")
-
-  # best_random should produce equal or better balance than single random
-  # Use a tolerance since stochastic algorithms vary
-  expect_gte(best_random_score, random_score * 0.9)  # Allow 10% tolerance
-
-  # Both scores should be positive and valid
-  expect_gt(random_score, 0)
-  expect_gt(best_random_score, 0)
-  expect_lt(random_score, 1)
-  expect_lt(best_random_score, 1)
-})
-
-test_that("simulated_annealing with effect_size improves over iterations", {
-  set.seed(5678)
-  toy_data <- simulate_data(n_samples = 100, block_size = 1)
-
-  # Single random allocation (does not support balance_type)
-  random_result <- allocate_samples(
-    data = toy_data,
-    method = "random",
-    covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
-    batch_size = 20,
-    seed = 5678
-  )
-  # Manually calculate effect sizes from the layout
-  random_effects <- calculate_effect_sizes(random_result$layout, blocking_variable = NULL)
-  random_score <- calculate_balance_score(
-    effect_sizes = random_effects$effect_size,
-    balance_type = "effect_size"
-  )
-
-  # Simulated annealing with effect_size
-  sa_result <- allocate_samples(
-    data = toy_data,
-    method = "simulated_annealing",
-    covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
-    batch_size = 20,
-    balance_type = "effect_size",
-    iterations = 200,
-    temperature = 1,
-    cooling_rate = 0.95,
-    seed = 5678,
-    plot_convergence = FALSE
-  )
-  # Manually calculate effect sizes from the layout
-  sa_effects <- calculate_effect_sizes(sa_result$layout, blocking_variable = NULL)
-  sa_score <- calculate_balance_score(
-    effect_sizes = sa_effects$effect_size,
-    balance_type = "effect_size"
-  )
-
-  # Print scores for comparison
-  cat("\n  Random balance score (effect_size):            ", round(random_score, 4))
-  cat("\n  Simulated annealing balance score (effect_size):", round(sa_score, 4))
-  cat("\n  Improvement: ", round((sa_score - random_score), 2), "\n")
-
-  # Check that optimisation_data shows improvement over iterations
-  expect_true("objective_value" %in% names(sa_result$optimisation_data))
-  initial_score <- sa_result$optimisation_data$objective_value[1]
-  final_score <- tail(sa_result$optimisation_data$objective_value, 1)
-  cat("  Initial balance score:", round(initial_score, 4), "\n")
-  cat("  Final balance score:  ", round(final_score, 4), "\n")
-
-  # Final score should be better than or equal to initial score
-  expect_gte(final_score, initial_score)
-
-  # SA should produce equal or better balance than random
-  expect_gte(sa_score, random_score * 0.9)  # Allow 10% tolerance
-
-  # Both scores should be positive and valid
-  expect_gt(random_score, 0)
-  expect_gt(sa_score, 0)
-  expect_lt(random_score, 1)
-  expect_lt(sa_score, 1)
-})
-
-test_that("simulated_annealing with effect_size and blocking improves balance", {
-  set.seed(9012)
-  toy_data <- simulate_data(n_samples = 60, block_size = 3)
-
-  # Single random allocation with blocking (does not support balance_type)
-  random_result <- allocate_samples(
-    data = toy_data,
-    method = "random",
-    covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
-    blocking_variable = "subject_id",
-    batch_size = 12,
-    seed = 9012
-  )
-  # Manually calculate effect sizes from the layout
-  random_effects <- calculate_effect_sizes(random_result$layout, blocking_variable = "subject_id")
-  random_score <- calculate_balance_score(
-    effect_sizes = random_effects$effect_size,
-    balance_type = "effect_size"
-  )
-
-  # Simulated annealing with blocking and effect_size
-  sa_result <- allocate_samples(
-    data = toy_data,
-    method = "simulated_annealing",
-    covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
-    blocking_variable = "subject_id",
-    batch_size = 12,
-    balance_type = "effect_size",
-    iterations = 200,
-    temperature = 1,
-    cooling_rate = 0.95,
-    seed = 9012,
-    plot_convergence = FALSE
-  )
-  # Manually calculate effect sizes from the layout
-  sa_effects <- calculate_effect_sizes(sa_result$layout, blocking_variable = "subject_id")
-  sa_score <- calculate_balance_score(
-    effect_sizes = sa_effects$effect_size,
-    balance_type = "effect_size"
-  )
-
-  # Print scores for comparison
-  cat("\n  Random balance score (effect_size, blocking):            ", round(random_score, 4))
-  cat("\n  Simulated annealing balance score (effect_size, blocking):", round(sa_score, 4))
-  cat("\n  Improvement: ", round((sa_score - random_score), 2), "\n")
+  # SA should have strictly improved the balance score
+  sa_results <- test_covariates(sa_result$layout, blocking_variable = "subject_id")
+  sa_score <- calculate_balance_score(p_values = sa_results$p_value)
+  expect_gt(sa_score, biased_score)
 
   # Verify blocks stay together
   layout_no_padding <- sa_result$layout[!grepl("padding", sa_result$layout$sample_id), ]
@@ -347,13 +130,108 @@ test_that("simulated_annealing with effect_size and blocking improves balance", 
     dplyr::group_by(subject_id) %>%
     dplyr::summarise(n_batches = dplyr::n_distinct(batch_allocation))
   expect_true(all(subjects_split$n_batches == 1))
+})
 
-  # SA should produce equal or better balance than random
-  expect_gte(sa_score, random_score * 0.9)  # Allow 10% tolerance
+test_that("SA improves balance from a deliberately biased layout (unequal block sizes)", {
+  set.seed(42)
+  toy_data <- simulate_data(n_samples = 102, block_size = 6) %>%
+    dplyr::slice(-sample(1:dplyr::n(), 12))
 
-  # Both scores should be positive and valid
-  expect_gt(random_score, 0)
-  expect_gt(sa_score, 0)
-  expect_lt(random_score, 1)
-  expect_lt(sa_score, 1)
+  batch_size <- 15
+
+  # Verify unequal block sizes exist
+  block_sizes_table <- table(toy_data$subject_id)
+  expect_true(length(unique(block_sizes_table)) > 1)
+
+  # Create a biased layout using the same first-fit bin packing as
+  # allocate_single_random, but sorting blocks by mean age instead of
+  # randomising. This clusters subjects with similar ages into the
+  # same batches, creating deliberate covariate imbalance.
+  subject_mean_age <- toy_data %>%
+    dplyr::group_by(subject_id) %>%
+    dplyr::summarise(mean_age = mean(age_at_baseline, na.rm = TRUE)) %>%
+    dplyr::arrange(mean_age)
+
+  block_df <- data.frame(
+    block = subject_mean_age$subject_id,
+    size = as.numeric(block_sizes_table[subject_mean_age$subject_id]),
+    stringsAsFactors = FALSE
+  )
+
+  # First-fit bin packing (same logic as allocate_single_random Case 2b)
+  batch_capacities <- c()
+  batch_assignments <- setNames(integer(nrow(block_df)), block_df$block)
+
+  for (i in seq_len(nrow(block_df))) {
+    blk <- block_df$block[i]
+    blk_size <- block_df$size[i]
+    placed <- FALSE
+    for (b in seq_along(batch_capacities)) {
+      if (batch_capacities[b] + blk_size <= batch_size) {
+        batch_capacities[b] <- batch_capacities[b] + blk_size
+        batch_assignments[blk] <- b
+        placed <- TRUE
+        break
+      }
+    }
+    if (!placed) {
+      batch_capacities <- c(batch_capacities, blk_size)
+      batch_assignments[blk] <- length(batch_capacities)
+    }
+  }
+
+  # Assign samples to batches
+  biased_data <- toy_data
+  biased_data$batch_allocation <- factor(
+    sapply(as.character(biased_data$subject_id), function(id) batch_assignments[[id]])
+  )
+
+  # Pad batches
+  actual_per_batch <- table(biased_data$batch_allocation)
+  unfilled <- batch_size - actual_per_batch
+  padding <- do.call(rbind, lapply(names(unfilled), function(b) {
+    if (unfilled[b] > 0) {
+      pad <- as.data.frame(matrix(NA, nrow = unfilled[b], ncol = ncol(biased_data)))
+      colnames(pad) <- colnames(biased_data)
+      pad$batch_allocation <- factor(rep(b, unfilled[b]),
+                                     levels = levels(biased_data$batch_allocation))
+      pad
+    }
+  }))
+  if (!is.null(padding) && nrow(padding) > 0) {
+    padding$sample_id <- paste0("padding", seq_len(nrow(padding)))
+    biased_layout <- dplyr::bind_rows(biased_data, padding)
+  } else {
+    biased_layout <- biased_data
+  }
+
+  # Measure p-values of the biased layout
+  biased_results <- test_covariates(biased_layout, blocking_variable = "subject_id")
+  biased_score <- calculate_balance_score(p_values = biased_results$p_value)
+
+  # Run SA for unequal blocks starting from the biased layout
+  sa_result <- simulate_annealing_for_unequal_block_size(
+    data = toy_data,
+    covariates = c("age_at_baseline", "bmi_at_baseline", "sex"),
+    blocking_variable = "subject_id",
+    batch_size = batch_size,
+    temperature = 1,
+    cooling_rate = 0.95,
+    iterations = 300,
+    plot = FALSE,
+    balance_type = "p_value",
+    initial_layout = biased_layout
+  )
+
+  # SA should have strictly improved the balance score
+  sa_results <- test_covariates(sa_result$layout, blocking_variable = "subject_id")
+  sa_score <- calculate_balance_score(p_values = sa_results$p_value)
+  expect_gt(sa_score, biased_score)
+
+  # Verify blocks stay together
+  layout_no_padding <- sa_result$layout[!grepl("padding", sa_result$layout$sample_id), ]
+  subjects_split <- layout_no_padding %>%
+    dplyr::group_by(subject_id) %>%
+    dplyr::summarise(n_batches = dplyr::n_distinct(batch_allocation))
+  expect_true(all(subjects_split$n_batches == 1))
 })

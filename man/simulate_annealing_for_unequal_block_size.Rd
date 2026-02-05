@@ -14,7 +14,8 @@ simulate_annealing_for_unequal_block_size(
   iterations,
   plot = TRUE,
   balance_metric = "harmonic_mean",
-  balance_type = "p_value"
+  balance_type = "p_value",
+  initial_layout = NULL
 )
 }
 \arguments{
@@ -33,16 +34,24 @@ If NA or missing, no blocking is applied.}
 
 \item{iterations}{Integer specifying the number of iterations to run.}
 
-\item{plot}{Logical indicating whether to plot optimization progress. Default is TRUE.}
+\item{plot}{Logical indicating whether to plot optimisation progress. Default is TRUE.}
 
 \item{balance_metric}{Character string specifying the metric to use ("harmonic_mean" or "product").}
+
+\item{balance_type}{A character string specifying what metric to calculate.
+Options are "p_value" (default) or "effect_size".}
+
+\item{initial_layout}{Optional data.frame providing a pre-computed initial
+layout to use instead of generating a random one. Default is NULL.}
 }
 \value{
 A list with three elements:
 \itemize{
 \item layout: data.frame with batch_allocation column added (may include padding rows)
 \item results: data.frame with covariate balance test results
-\item optimisation_data: data.frame tracking the optimization process across iterations
+\item optimisation_data: data.frame tracking the optimisation process across iterations
+(iteration, temperature, objective_value). Diagnostic columns for swap mechanics
+are available in the code but commented out by default.
 }
 }
 \description{

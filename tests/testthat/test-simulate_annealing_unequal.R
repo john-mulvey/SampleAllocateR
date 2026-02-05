@@ -22,13 +22,14 @@ test_that("simulate_annealing_for_unequal_block_size returns valid swaps", {
   expect_true("results" %in% names(result))
   expect_true("optimisation_data" %in% names(result))
 
-  # Check that optimisation_data has expected columns
-  expect_true("swap_possible" %in% names(result$optimisation_data))
-  expect_true("swap_size" %in% names(result$optimisation_data))
-  expect_true("padding_samples_used" %in% names(result$optimisation_data))
+  # Check that optimisation_data has standard columns (diagnostic columns now commented out)
+  expect_true("iteration" %in% names(result$optimisation_data))
+  expect_true("temperature" %in% names(result$optimisation_data))
+  expect_true("objective_value" %in% names(result$optimisation_data))
 
-  # Check that some swaps were possible
-  expect_true(any(result$optimisation_data$swap_possible, na.rm = TRUE))
+  # Check that optimisation ran (all iterations have objective values)
+  expect_equal(nrow(result$optimisation_data), 50)
+  expect_true(all(!is.na(result$optimisation_data$objective_value)))
 })
 
 test_that("simulate_annealing_for_unequal_block_size handles padding correctly", {

@@ -65,7 +65,8 @@ test_that("allocate_samples routes to simulate_annealing_for_unequal_block_size 
   expect_true("results" %in% names(result))
   expect_true("optimisation_data" %in% names(result))
 
-  # The experimental version should have additional columns in optimisation_data
-  expect_true("swap_possible" %in% names(result$optimisation_data))
-  expect_true("swap_size" %in% names(result$optimisation_data))
+  # Check standard optimisation_data columns (diagnostic columns now commented out)
+  expect_true("iteration" %in% names(result$optimisation_data))
+  expect_true("temperature" %in% names(result$optimisation_data))
+  expect_true("objective_value" %in% names(result$optimisation_data))
 })

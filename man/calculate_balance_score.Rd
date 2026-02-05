@@ -53,7 +53,7 @@ covariate metrics using either harmonic mean or product.
 \details{
 The function transforms effect sizes as (1 - effect_size) so that lower effect
 sizes (better balance) produce higher scores, matching the direction of p-values.
-This ensures all metrics can be maximized by the optimization algorithm.
+This ensures all metrics can be maximised by the optimisation algorithm.
 }
 \examples{
 # Statistical significance with harmonic mean (default)

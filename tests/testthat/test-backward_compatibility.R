@@ -19,9 +19,9 @@ test_that("allocate_samples without balance_type defaults to p_value mode", {
   expect_true("layout" %in% names(result))
   expect_true("results" %in% names(result))
 
-  # Should have p_value column (not effect_size)
+  # Should have both p_value and effect_size columns
   expect_true("p_value" %in% names(result$results))
-  expect_false("effect_size" %in% names(result$results))
+  expect_true("effect_size" %in% names(result$results))
 })
 
 test_that("calculate_balance_score with just p_values vector (old API) still works", {
